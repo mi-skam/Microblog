@@ -1,0 +1,97 @@
+@startuml
+
+' SQLite Database Entities
+entity "User" as user {
+  *user_id : INTEGER <<PK>>
+  --
+  username : VARCHAR(50) <<UNIQUE>>
+  email : VARCHAR(255) <<UNIQUE>>
+  password_hash : VARCHAR(255)
+  role : VARCHAR(10) = 'admin'
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+' File System Entities (conceptual)
+entity "Post File" as post {
+  --
+  **Frontmatter (YAML)**
+  title : VARCHAR(200)
+  date : DATE
+  slug : VARCHAR(200) <<optional>>
+  tags : ARRAY[VARCHAR]
+  draft : BOOLEAN = false
+  description : VARCHAR(300)
+  --
+  **Content (Markdown)**
+  content : TEXT
+  --
+  **File Metadata**
+  file_path : VARCHAR(500)
+  created_at : TIMESTAMP
+  modified_at : TIMESTAMP
+}
+
+entity "Image File" as image {
+  --
+  **File Metadata**
+  filename : VARCHAR(255)
+  file_path : VARCHAR(500)
+  file_size : INTEGER
+  mime_type : VARCHAR(100)
+  upload_date : TIMESTAMP
+  --
+  **References**
+  referenced_in_posts : ARRAY[VARCHAR]
+}
+
+entity "Config File" as config {
+  --
+  **Site Settings**
+  site.title : VARCHAR(200)
+  site.url : VARCHAR(500)
+  site.author : VARCHAR(200)
+  site.description : VARCHAR(500)
+  --
+  **Build Settings**
+  build.output_dir : VARCHAR(100)
+  build.backup_dir : VARCHAR(100)
+  build.posts_per_page : INTEGER
+  --
+  **Server Settings**
+  server.host : VARCHAR(100)
+  server.port : INTEGER
+  server.hot_reload : BOOLEAN
+  --
+  **Auth Settings**
+  auth.jwt_secret : VARCHAR(255)
+  auth.session_expires : INTEGER
+}
+
+' JWT Token (stateless, no storage)
+entity "JWT Session" as session {
+  --
+  **Token Claims**
+  user_id : INTEGER
+  username : VARCHAR(50)
+  exp : TIMESTAMP
+  iat : TIMESTAMP
+  --
+  **Storage**
+  stored_in : httpOnly Cookie
+  signed_with : auth.jwt_secret
+}
+
+' Relationships
+user ||--o{ session : "generates"
+post }o--|| user : "authored_by"
+image }o--o{ post : "referenced_in"
+config ||--|| user : "managed_by"
+
+note top of user : Single record only\nRole fixed to 'admin'\nStored in SQLite
+note top of post : Stored as .md files\nYAML frontmatter + content\nDirectory: content/posts/
+note top of image : Stored in content/images/\nSupported: jpg, png, gif, webp, svg\nCopied to build/images/
+note top of config : YAML file: content/_data/config.yaml\nValidated on application start\nHot-reload in dev mode
+note top of session : Stateless JWT in httpOnly cookie\nNo database storage required\nExpires per configuration
+
+@enduml

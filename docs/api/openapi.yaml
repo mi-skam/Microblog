@@ -1,0 +1,877 @@
+openapi: 3.0.3
+info:
+  title: Microblog API
+  description: |
+    RESTful API with HTMX enhancement for the Microblog system.
+
+    This API provides a hybrid static-first architecture with HTML-first responses
+    for progressive enhancement through HTMX interactions. The system supports
+    single-user authentication with JWT tokens and comprehensive content management.
+
+    ## Key Features
+    - JWT-based single-user authentication
+    - HTMX-enhanced interactions with HTML fragment responses
+    - CSRF protection for all state-changing operations
+    - Content management with markdown processing
+    - Image upload and management
+    - Atomic build process with backup/rollback
+
+  version: 1.0.0
+  contact:
+    name: Microblog API Support
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://127.0.0.1:8000
+    description: Development server
+  - url: https://example.com
+    description: Production server
+
+security:
+  - JWTAuth: []
+  - CSRFToken: []
+
+paths:
+  # Authentication Endpoints
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: User authentication
+      description: |
+        Authenticate user with credentials and return JWT token in httpOnly cookie.
+        Validates username/password and sets secure session cookie.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+                - csrf_token
+              properties:
+                username:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  description: Username for authentication
+                password:
+                  type: string
+                  minLength: 1
+                  maxLength: 255
+                  description: Password for authentication
+                csrf_token:
+                  type: string
+                  description: CSRF protection token
+      responses:
+        '302':
+          description: Authentication successful, redirect to dashboard
+          headers:
+            Location:
+              schema:
+                type: string
+                example: /dashboard
+            Set-Cookie:
+              schema:
+                type: string
+                example: jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...; HttpOnly; Secure; SameSite=Strict; Max-Age=7200
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Invalid CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: User logout
+      description: Terminate session and clear authentication cookie
+      responses:
+        '302':
+          description: Logout successful, redirect to login
+          headers:
+            Location:
+              schema:
+                type: string
+                example: /auth/login
+            Set-Cookie:
+              schema:
+                type: string
+                example: jwt=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Strict
+
+  /auth/check:
+    get:
+      tags:
+        - Authentication
+      summary: Session validation
+      description: Validate current session for protected routes
+      responses:
+        '200':
+          description: Valid session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                    example: true
+                  user:
+                    type: string
+                    example: admin
+        '401':
+          description: Invalid or expired session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Dashboard Page Routes
+  /dashboard:
+    get:
+      tags:
+        - Dashboard
+      summary: Main dashboard page
+      description: Main dashboard with post listing and management interface
+      responses:
+        '200':
+          description: Dashboard page rendered successfully
+          content:
+            text/html:
+              schema:
+                type: string
+                description: Complete dashboard HTML page
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /dashboard/posts/new:
+    get:
+      tags:
+        - Dashboard
+      summary: New post creation form
+      description: Display form for creating new blog post
+      responses:
+        '200':
+          description: New post form rendered successfully
+          content:
+            text/html:
+              schema:
+                type: string
+                description: New post creation form HTML
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /dashboard/posts/{id}/edit:
+    get:
+      tags:
+        - Dashboard
+      summary: Post editing interface
+      description: Display form for editing existing blog post
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Post ID to edit
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]+$'
+      responses:
+        '200':
+          description: Post edit form rendered successfully
+          content:
+            text/html:
+              schema:
+                type: string
+                description: Post editing form HTML
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /dashboard/settings:
+    get:
+      tags:
+        - Dashboard
+      summary: Configuration management interface
+      description: Display interface for managing application settings
+      responses:
+        '200':
+          description: Settings page rendered successfully
+          content:
+            text/html:
+              schema:
+                type: string
+                description: Settings management interface HTML
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # HTMX API Endpoints
+  /api/posts:
+    post:
+      tags:
+        - Posts API
+      summary: Create new post
+      description: Create new blog post with live feedback via HTMX
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostCreate'
+      responses:
+        '201':
+          description: Post created successfully
+          content:
+            text/html:
+              schema:
+                type: string
+                description: HTML fragment with new post data for HTMX
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '400':
+          description: Invalid post data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+            text/html:
+              schema:
+                type: string
+                description: HTML error fragment for HTMX display
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Invalid CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+            text/html:
+              schema:
+                type: string
+                description: HTML validation error fragment for HTMX
+
+  /api/posts/{id}:
+    put:
+      tags:
+        - Posts API
+      summary: Update existing post
+      description: Update existing blog post content
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Post ID to update
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]+$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostUpdate'
+      responses:
+        '200':
+          description: Post updated successfully
+          content:
+            text/html:
+              schema:
+                type: string
+                description: HTML fragment with updated post data for HTMX
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '400':
+          description: Invalid post data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Invalid CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+
+    delete:
+      tags:
+        - Posts API
+      summary: Delete post
+      description: Delete blog post with confirmation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Post ID to delete
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]+$'
+      responses:
+        '200':
+          description: Post deleted successfully
+          content:
+            text/html:
+              schema:
+                type: string
+                description: HTML fragment removing post from list for HTMX
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Post deleted successfully
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Invalid CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/posts/{id}/publish:
+    post:
+      tags:
+        - Posts API
+      summary: Toggle post publication status
+      description: Toggle between draft and published status for a post
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Post ID to toggle publication status
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]+$'
+      responses:
+        '200':
+          description: Publication status toggled successfully
+          content:
+            text/html:
+              schema:
+                type: string
+                description: HTML fragment with updated post status for HTMX
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Post published successfully
+                  published:
+                    type: boolean
+                    description: New publication status
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Invalid CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/build:
+    post:
+      tags:
+        - Build API
+      summary: Trigger site rebuild
+      description: Trigger site generation process with progress updates
+      responses:
+        '202':
+          description: Build process started
+          content:
+            text/html:
+              schema:
+                type: string
+                description: HTML fragment with build progress for HTMX
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Build process started
+                  build_id:
+                    type: string
+                    description: Unique identifier for this build process
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Invalid CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Build process failed to start
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/images:
+    post:
+      tags:
+        - Images API
+      summary: Upload image
+      description: Handle image uploads with validation and markdown snippet generation
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Image file to upload (JPEG, PNG, WebP)
+                csrf_token:
+                  type: string
+                  description: CSRF protection token
+      responses:
+        '201':
+          description: Image uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageUploadResponse'
+        '400':
+          description: Invalid file or request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Invalid CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: File too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+
+components:
+  securitySchemes:
+    JWTAuth:
+      type: apiKey
+      in: cookie
+      name: jwt
+      description: JWT token stored in httpOnly cookie for authentication
+    CSRFToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: CSRF protection token required for state-changing operations
+
+  schemas:
+    # Site Configuration Models
+    SiteConfig:
+      type: object
+      required:
+        - title
+        - url
+        - author
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Site title
+          example: My Microblog
+        url:
+          type: string
+          pattern: '^https?://.+'
+          description: Site base URL
+          example: https://example.com
+        author:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Site author name
+          example: Blog Author
+        description:
+          type: string
+          nullable: true
+          maxLength: 500
+          description: Site description
+          example: A personal blog powered by Microblog
+
+    BuildConfig:
+      type: object
+      properties:
+        output_dir:
+          type: string
+          maxLength: 100
+          default: build
+          description: Build output directory
+        backup_dir:
+          type: string
+          maxLength: 100
+          default: build.bak
+          description: Backup directory for previous builds
+        posts_per_page:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 10
+          description: Number of posts per page in pagination
+
+    ServerConfig:
+      type: object
+      properties:
+        host:
+          type: string
+          maxLength: 100
+          default: 127.0.0.1
+          description: Server host address
+        port:
+          type: integer
+          minimum: 1024
+          maximum: 65535
+          default: 8000
+          description: Server port number
+        hot_reload:
+          type: boolean
+          default: false
+          description: Enable hot-reload in development mode
+
+    AuthConfig:
+      type: object
+      required:
+        - jwt_secret
+      properties:
+        jwt_secret:
+          type: string
+          minLength: 32
+          maxLength: 255
+          description: JWT signing secret (minimum 32 characters)
+        session_expires:
+          type: integer
+          minimum: 60
+          default: 7200
+          description: Session expiration time in seconds
+
+    AppConfig:
+      type: object
+      required:
+        - site
+        - auth
+      properties:
+        site:
+          $ref: '#/components/schemas/SiteConfig'
+        build:
+          $ref: '#/components/schemas/BuildConfig'
+        server:
+          $ref: '#/components/schemas/ServerConfig'
+        auth:
+          $ref: '#/components/schemas/AuthConfig'
+
+    # Post Models
+    Post:
+      type: object
+      required:
+        - id
+        - title
+        - content
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          pattern: '^[a-zA-Z0-9\-_]+$'
+          description: Unique post identifier
+          example: my-first-post
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Post title
+          example: My First Post
+        content:
+          type: string
+          minLength: 1
+          description: Post content in Markdown format
+          example: "# Hello World\n\nThis is my first blog post."
+        tags:
+          type: array
+          items:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]+$'
+          maxItems: 10
+          description: Post tags
+          example: ["tech", "blogging"]
+        draft:
+          type: boolean
+          default: true
+          description: Whether post is in draft status
+        created_at:
+          type: string
+          format: date-time
+          description: Post creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Post last update timestamp
+        slug:
+          type: string
+          pattern: '^[a-zA-Z0-9\-_]+$'
+          description: URL-friendly post slug
+          example: my-first-post
+
+    PostCreate:
+      type: object
+      required:
+        - title
+        - content
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Post title
+          example: My New Post
+        content:
+          type: string
+          minLength: 1
+          description: Post content in Markdown format
+          example: "# Hello World\n\nThis is my post content."
+        tags:
+          type: array
+          items:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]+$'
+          maxItems: 10
+          description: Post tags
+          example: ["tech", "blogging"]
+        draft:
+          type: boolean
+          default: true
+          description: Whether post should be saved as draft
+
+    PostUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Updated post title
+        content:
+          type: string
+          minLength: 1
+          description: Updated post content in Markdown format
+        tags:
+          type: array
+          items:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]+$'
+          maxItems: 10
+          description: Updated post tags
+        draft:
+          type: boolean
+          description: Updated draft status
+
+    # Image Models
+    ImageUploadResponse:
+      type: object
+      required:
+        - filename
+        - url
+        - markdown
+      properties:
+        filename:
+          type: string
+          description: Generated filename for the uploaded image
+          example: 2025-10-26-image.jpg
+        url:
+          type: string
+          description: Relative URL to the uploaded image
+          example: ../images/2025-10-26-image.jpg
+        markdown:
+          type: string
+          description: Markdown snippet for embedding the image
+          example: "![Image description](../images/2025-10-26-image.jpg)"
+
+    # Error Models
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Error code identifier
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              description: Human-readable error message
+              example: Invalid post data provided
+            details:
+              type: object
+              additionalProperties: true
+              description: Additional error details
+              example:
+                field: ["Field-specific error message"]
+
+    ValidationErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+            - details
+          properties:
+            code:
+              type: string
+              enum: [VALIDATION_ERROR]
+              description: Validation error code
+            message:
+              type: string
+              description: General validation error message
+              example: Validation failed for provided data
+            details:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+              description: Field-specific validation errors
+              example:
+                title: ["Title is required and must be between 1-200 characters"]
+                content: ["Content cannot be empty"]
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Dashboard
+    description: Dashboard page routes and interfaces
+  - name: Posts API
+    description: Blog post management API endpoints
+  - name: Build API
+    description: Site build and generation operations
+  - name: Images API
+    description: Image upload and management

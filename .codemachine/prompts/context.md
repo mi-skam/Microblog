@@ -10,18 +10,18 @@ This is the full specification of the task you must complete.
 
 ```json
 {
-  "task_id": "I2.T3",
+  "task_id": "I2.T4",
   "iteration_id": "I2",
   "iteration_goal": "Implement authentication system with JWT tokens, user management, and core data models for posts and images",
-  "description": "Implement User model with SQLite database, bcrypt password hashing, and JWT token management. Create database schema and user creation utilities.",
+  "description": "Create Post data model for markdown file handling with YAML frontmatter parsing, validation, and filesystem operations. Implement draft/published status management.",
   "agent_type_hint": "BackendAgent",
-  "inputs": "User model specification, security requirements (bcrypt cost ≥12), JWT configuration",
-  "target_files": ["microblog/auth/models.py", "microblog/auth/jwt_handler.py", "microblog/auth/password.py", "microblog/database.py"],
+  "inputs": "Post model specification, markdown processing requirements, file system storage strategy",
+  "target_files": ["microblog/content/post_service.py", "microblog/content/validators.py"],
   "input_files": ["microblog/server/config.py", "docs/diagrams/database_erd.puml"],
-  "deliverables": "User SQLite model, password hashing utilities, JWT token generation/validation, database initialization",
-  "acceptance_criteria": "User creation works correctly, passwords hash with bcrypt cost ≥12, JWT tokens generate and validate properly, database initializes automatically",
+  "deliverables": "Post service with CRUD operations, frontmatter validation, markdown file handling, draft/publish workflow",
+  "acceptance_criteria": "Posts save/load from markdown files correctly, YAML frontmatter parses properly, validation catches invalid data, draft/publish status works",
   "dependencies": ["I1.T4"],
-  "parallelizable": false,
+  "parallelizable": true,
   "done": false
 }
 ```
@@ -63,6 +63,62 @@ entity "User" as user {
   updated_at : TIMESTAMP
 }
 
+' File System Entities (conceptual)
+entity "Post File" as post {
+  --
+  **Frontmatter (YAML)**
+  title : VARCHAR(200)
+  date : DATE
+  slug : VARCHAR(200) <<optional>>
+  tags : ARRAY[VARCHAR]
+  draft : BOOLEAN = false
+  description : VARCHAR(300)
+  --
+  **Content (Markdown)**
+  content : TEXT
+  --
+  **File Metadata**
+  file_path : VARCHAR(500)
+  created_at : TIMESTAMP
+  modified_at : TIMESTAMP
+}
+
+entity "Image File" as image {
+  --
+  **File Metadata**
+  filename : VARCHAR(255)
+  file_path : VARCHAR(500)
+  file_size : INTEGER
+  mime_type : VARCHAR(100)
+  upload_date : TIMESTAMP
+  --
+  **References**
+  referenced_in_posts : ARRAY[VARCHAR]
+}
+
+entity "Config File" as config {
+  --
+  **Site Settings**
+  site.title : VARCHAR(200)
+  site.url : VARCHAR(500)
+  site.author : VARCHAR(200)
+  site.description : VARCHAR(500)
+  --
+  **Build Settings**
+  build.output_dir : VARCHAR(100)
+  build.backup_dir : VARCHAR(100)
+  build.posts_per_page : INTEGER
+  --
+  **Server Settings**
+  server.host : VARCHAR(100)
+  server.port : INTEGER
+  server.hot_reload : BOOLEAN
+  --
+  **Auth Settings**
+  auth.jwt_secret : VARCHAR(255)
+  auth.session_expires : INTEGER
+}
+
 ' JWT Token (stateless, no storage)
 entity "JWT Session" as session {
   --
@@ -79,8 +135,14 @@ entity "JWT Session" as session {
 
 ' Relationships
 user ||--o{ session : "generates"
+post }o--|| user : "authored_by"
+image }o--o{ post : "referenced_in"
+config ||--|| user : "managed_by"
 
 note top of user : Single record only\nRole fixed to 'admin'\nStored in SQLite
+note top of post : Stored as .md files\nYAML frontmatter + content\nDirectory: content/posts/
+note top of image : Stored in content/images/\nSupported: jpg, png, gif, webp, svg\nCopied to build/images/
+note top of config : YAML file: content/_data/config.yaml\nValidated on application start\nHot-reload in dev mode
 note top of session : Stateless JWT in httpOnly cookie\nNo database storage required\nExpires per configuration
 
 @enduml
@@ -98,6 +160,20 @@ note top of session : Stateless JWT in httpOnly cookie\nNo database storage requ
 - Automatic schema creation on first run
 - Handles concurrent read access (dashboard operations)
 
+**File System Storage (content/):**
+- Markdown files with YAML frontmatter for posts
+- Images stored in organized directory structure
+- Configuration as human-readable YAML
+- Version control friendly (Git integration possible)
+- Direct file system access for build process
+
+**Generated Output (build/):**
+- Static HTML, CSS, and JavaScript files
+- Copied and optimized images
+- RSS feed and sitemap generation
+- Atomic generation with backup/rollback
+- Deployable to any static file server
+
 **Performance Considerations:**
 - File system operations optimized for sequential reading during builds
 - SQLite provides excellent performance for single-user authentication
@@ -105,59 +181,20 @@ note top of session : Stateless JWT in httpOnly cookie\nNo database storage requ
 - Build output optimized for CDN and static hosting performance
 ```
 
-### Context: authentication-authorization (from 05_Operational_Architecture.md)
+### Context: task-i2-t4 (from 02_Iteration_I2.md)
 
 ```markdown
-**Authentication & Authorization:**
-
-**Authentication Strategy:**
-- **Single-User Design**: System supports exactly one admin user with fixed role
-- **JWT-Based Sessions**: Stateless authentication using JSON Web Tokens
-- **Secure Token Storage**: JWT stored in httpOnly, Secure, SameSite=Strict cookies
-- **Password Security**: Bcrypt hashing with cost factor ≥12 for password storage
-- **Session Management**: Configurable token expiration (default 2 hours)
-
-**Implementation Details:**
-```python
-# Authentication flow
-def authenticate_user(username: str, password: str) -> Optional[User]:
-    user = get_user_by_username(username)
-    if user and verify_password(password, user.password_hash):
-        token = create_jwt_token(user.user_id, user.username)
-        return user, token
-    return None
-
-# JWT Token Structure
-{
-    "user_id": 1,
-    "username": "admin",
-    "role": "admin",
-    "exp": 1635724800,  # Expiration timestamp
-    "iat": 1635721200   # Issued at timestamp
-}
-```
-
-**Authorization Model:**
-- **Role-Based**: Single admin role with full system access
-- **Route Protection**: Middleware validates JWT for protected endpoints
-- **CSRF Protection**: All state-changing operations require valid CSRF tokens
-- **Session Validation**: Automatic token expiration and renewal handling
-```
-
-### Context: task-i2-t3 (from 02_Iteration_I2.md)
-
-```markdown
-*   **Task 2.3:**
-    *   **Task ID:** `I2.T3`
-    *   **Description:** Implement User model with SQLite database, bcrypt password hashing, and JWT token management. Create database schema and user creation utilities.
+*   **Task 2.4:**
+    *   **Task ID:** `I2.T4`
+    *   **Description:** Create Post data model for markdown file handling with YAML frontmatter parsing, validation, and filesystem operations. Implement draft/published status management.
     *   **Agent Type Hint:** `BackendAgent`
-    *   **Inputs:** User model specification, security requirements (bcrypt cost ≥12), JWT configuration
+    *   **Inputs:** Post model specification, markdown processing requirements, file system storage strategy
     *   **Input Files:** ["microblog/server/config.py", "docs/diagrams/database_erd.puml"]
-    *   **Target Files:** ["microblog/auth/models.py", "microblog/auth/jwt_handler.py", "microblog/auth/password.py", "microblog/database.py"]
-    *   **Deliverables:** User SQLite model, password hashing utilities, JWT token generation/validation, database initialization
-    *   **Acceptance Criteria:** User creation works correctly, passwords hash with bcrypt cost ≥12, JWT tokens generate and validate properly, database initializes automatically
+    *   **Target Files:** ["microblog/content/post_service.py", "microblog/content/validators.py"]
+    *   **Deliverables:** Post service with CRUD operations, frontmatter validation, markdown file handling, draft/publish workflow
+    *   **Acceptance Criteria:** Posts save/load from markdown files correctly, YAML frontmatter parses properly, validation catches invalid data, draft/publish status works
     *   **Dependencies:** `I1.T4`
-    *   **Parallelizable:** No
+    *   **Parallelizable:** Yes
 ```
 
 ---
@@ -168,32 +205,28 @@ The following analysis is based on my direct review of the current codebase. Use
 
 ### Relevant Existing Code
 *   **File:** `microblog/server/config.py`
-    *   **Summary:** This file contains a complete configuration management system with Pydantic models for validation, including AuthConfig with jwt_secret and session_expires settings.
-    *   **Recommendation:** You MUST import and use the `get_config()` function from this file to access JWT configuration. The AuthConfig model already defines jwt_secret (min 32 chars) and session_expires (default 7200 seconds).
-
-*   **File:** `microblog/auth/models.py`
-    *   **Summary:** This file contains a complete User model implementation with SQLite integration, including create_table, CRUD operations, and single-user constraints.
-    *   **Recommendation:** The User model is ALREADY IMPLEMENTED and functional. You should review it for completeness but it appears to meet all ERD specifications.
-
-*   **File:** `microblog/auth/password.py`
-    *   **Summary:** This file contains complete bcrypt password hashing utilities with BCRYPT_ROUNDS=12, hash_password(), verify_password(), and password analysis functions.
-    *   **Recommendation:** The password hashing utilities are ALREADY IMPLEMENTED with the required bcrypt cost ≥12. You should use these existing functions.
-
-*   **File:** `microblog/auth/jwt_handler.py`
-    *   **Summary:** This file contains complete JWT token management with create_jwt_token(), verify_jwt_token(), token refresh, and expiry checking using the jose library.
-    *   **Recommendation:** The JWT system is ALREADY IMPLEMENTED and integrates with the config system. You should review for completeness but it appears functional.
-
-*   **File:** `microblog/database.py`
-    *   **Summary:** This file contains database initialization utilities, user creation functions, and database management tools that use the User model and password hashing.
-    *   **Recommendation:** The database utilities are ALREADY IMPLEMENTED with complete functionality for init, user creation, and database info retrieval.
+    *   **Summary:** This file contains the complete configuration management system with Pydantic models for validation, YAML parsing, and hot-reload capabilities. It provides `AppConfig`, `SiteConfig`, `BuildConfig`, `ServerConfig`, and `AuthConfig` models.
+    *   **Recommendation:** You MUST import and use the configuration system from this file. Use `get_config()` function to access configuration settings. Follow the established Pydantic model pattern for validation.
 
 *   **File:** `microblog/utils.py`
-    *   **Summary:** This file contains shared utilities including directory management and path helpers like get_project_root().
-    *   **Recommendation:** You SHOULD use the existing path utilities for consistent directory handling.
+    *   **Summary:** Contains shared utilities including `ensure_directory()`, `get_content_dir()`, `get_project_root()`, and file operations utilities.
+    *   **Recommendation:** You SHOULD import `get_content_dir()` to get the correct content directory path. Use `ensure_directory()` for creating required directories safely.
+
+*   **File:** `microblog/content/__init__.py`
+    *   **Summary:** Empty package initialization file for content management services with a docstring indicating this package provides CRUD operations for posts, image management, and content validation logic.
+    *   **Recommendation:** This is where your post service belongs. Follow the established package structure.
+
+*   **File:** `tests/conftest.py`
+    *   **Summary:** Comprehensive test fixtures including temp file handling, config validation patterns, and mock utilities. Uses pytest fixtures for config data validation and temporary directory management.
+    *   **Recommendation:** You MUST follow the established testing patterns. Use the existing fixtures like `temp_content_dir` for testing file operations and follow the validation patterns already established.
 
 ### Implementation Tips & Notes
-*   **Note:** ALL TARGET FILES for this task appear to be ALREADY IMPLEMENTED and functional. The task may be complete, or you may need to verify completeness against acceptance criteria.
-*   **Tip:** The existing code follows the ERD specification exactly - single admin user, proper password hashing with bcrypt cost 12, JWT integration with config system, and SQLite database with proper schema.
-*   **Warning:** Since the task asks to "implement" but the code exists, carefully verify that all acceptance criteria are met: user creation works, bcrypt cost ≥12 (confirmed), JWT tokens generate/validate (implemented), database initializes automatically (implemented).
-*   **Verification Needed:** Test that the existing implementation meets all acceptance criteria rather than rewriting existing functional code.
-*   **Integration Point:** The database.py file provides high-level functions like create_admin_user() and init_database() that integrate all the components together.
+*   **Tip:** The configuration system uses Pydantic models with comprehensive validation (field lengths, regex patterns, type checking). You SHOULD follow this same pattern for Post frontmatter validation.
+*   **Note:** The content directory structure is `content/posts/` for markdown files. The ERD shows posts stored as `.md files` with `YAML frontmatter + content` in `Directory: content/posts/`.
+*   **Warning:** The Post entity in the ERD shows specific field requirements: `title` (VARCHAR(200)), `date` (DATE), `slug` (VARCHAR(200) optional), `tags` (ARRAY[VARCHAR]), `draft` (BOOLEAN = false), `description` (VARCHAR(300)), and `content` (TEXT).
+*   **Tip:** The project uses Python 3.13+ type hints with union syntax (`str | None`). You SHOULD follow this modern typing convention.
+*   **Note:** The configuration system shows excellent error handling patterns with specific exception types (`FileNotFoundError`, `ValidationError`, `yaml.YAMLError`). You SHOULD implement similar error handling for Post operations.
+*   **Warning:** The content directory path is accessed via `get_content_dir() / "posts"` - ensure you use this pattern for consistency with the existing codebase.
+*   **Tip:** YAML parsing is handled with `yaml.safe_load()` throughout the codebase. You SHOULD use the same approach for frontmatter parsing.
+*   **Note:** The target files `microblog/content/post_service.py` and `microblog/content/validators.py` DO NOT EXIST yet. You need to create them from scratch following the established patterns in the codebase.
+*   **Warning:** Posts need both frontmatter validation AND markdown content handling. The frontmatter should be validated using Pydantic models similar to the config system.

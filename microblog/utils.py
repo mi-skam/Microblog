@@ -4,10 +4,8 @@ Shared utilities and helper functions.
 This module provides common functionality used across the microblog package.
 """
 
-import os
 import shutil
 from pathlib import Path
-from typing import Optional
 
 
 def ensure_directory(path: Path) -> None:

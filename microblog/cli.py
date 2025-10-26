@@ -5,13 +5,12 @@ This module provides command-line tools for building, serving, and managing
 the microblog application.
 """
 
-import click
-from pathlib import Path
-from typing import Optional
-import uvicorn
 import os
+from pathlib import Path
 
-from microblog.utils import get_project_root, get_build_dir, get_content_dir
+import click
+
+from microblog.utils import get_build_dir, get_content_dir, get_project_root
 
 
 @click.group()
@@ -33,8 +32,12 @@ def main(ctx: click.Context, verbose: bool) -> None:
 
 
 @main.command()
-@click.option("--output", "-o", default="build", help="Output directory for generated site")
-@click.option("--force", "-f", is_flag=True, help="Force rebuild even if no changes detected")
+@click.option(
+    "--output", "-o", default="build", help="Output directory for generated site"
+)
+@click.option(
+    "--force", "-f", is_flag=True, help="Force rebuild even if no changes detected"
+)
 @click.pass_context
 def build(ctx: click.Context, output: str, force: bool) -> None:
     """
@@ -50,7 +53,7 @@ def build(ctx: click.Context, output: str, force: bool) -> None:
         click.echo(f"Force rebuild: {force}")
 
     # TODO: Implement actual build logic in future iterations
-    click.echo("🚧 Build functionality will be implemented in the next iteration")
+    click.echo("Build functionality will be implemented in the next iteration")
     click.echo(f"Would build site to: {Path(output).resolve()}")
 
     if force:
@@ -61,9 +64,13 @@ def build(ctx: click.Context, output: str, force: bool) -> None:
 @click.option("--host", "-h", default="127.0.0.1", help="Host to bind the server")
 @click.option("--port", "-p", default=8000, type=int, help="Port to bind the server")
 @click.option("--reload", is_flag=True, help="Enable auto-reload for development")
-@click.option("--dashboard-only", is_flag=True, help="Serve only the dashboard (no static site)")
+@click.option(
+    "--dashboard-only", is_flag=True, help="Serve only the dashboard (no static site)"
+)
 @click.pass_context
-def serve(ctx: click.Context, host: str, port: int, reload: bool, dashboard_only: bool) -> None:
+def serve(
+    ctx: click.Context, host: str, port: int, reload: bool, dashboard_only: bool
+) -> None:
     """
     Start the development server.
 
@@ -78,7 +85,7 @@ def serve(ctx: click.Context, host: str, port: int, reload: bool, dashboard_only
         click.echo(f"Dashboard only: {dashboard_only}")
 
     # TODO: Implement actual server logic in future iterations
-    click.echo("🚧 Server functionality will be implemented in the next iteration")
+    click.echo("Server functionality will be implemented in the next iteration")
     click.echo(f"Would serve on: http://{host}:{port}")
 
     if dashboard_only:
@@ -90,7 +97,14 @@ def serve(ctx: click.Context, host: str, port: int, reload: bool, dashboard_only
 
 @main.command()
 @click.option("--username", "-u", prompt=True, help="Username for the blog admin")
-@click.option("--password", "-p", prompt=True, hide_input=True, confirmation_prompt=True, help="Password for the blog admin")
+@click.option(
+    "--password",
+    "-p",
+    prompt=True,
+    hide_input=True,
+    confirmation_prompt=True,
+    help="Password for the blog admin",
+)
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing user if present")
 @click.pass_context
 def create_user(ctx: click.Context, username: str, password: str, force: bool) -> None:
@@ -107,7 +121,7 @@ def create_user(ctx: click.Context, username: str, password: str, force: bool) -
         click.echo(f"Force overwrite: {force}")
 
     # TODO: Implement actual user creation logic in future iterations
-    click.echo("🚧 User creation functionality will be implemented in the next iteration")
+    click.echo("User creation functionality will be implemented in the next iteration")
     click.echo(f"Would create user: {username}")
 
     if force:
@@ -129,7 +143,7 @@ def init(ctx: click.Context) -> None:
         click.echo("Initializing new microblog project...")
 
     # TODO: Implement actual initialization logic in future iterations
-    click.echo("🚧 Project initialization will be implemented in the next iteration")
+    click.echo("Project initialization will be implemented in the next iteration")
     click.echo("Would create:")
     click.echo("  - content/posts/")
     click.echo("  - content/pages/")
@@ -151,7 +165,7 @@ def status(ctx: click.Context) -> None:
     content_dir = get_content_dir()
     build_dir = get_build_dir()
 
-    click.echo("📊 Microblog Status")
+    click.echo("Microblog Status")
     click.echo("=" * 40)
     click.echo(f"Project root: {project_root}")
     click.echo(f"Content directory: {content_dir}")

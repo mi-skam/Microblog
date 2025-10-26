@@ -182,6 +182,21 @@ microblog/
     *   **CLI Interface**: Commands for build, serve, user creation, and system management
     *   **Configuration Manager**: YAML-based settings with validation and hot-reload support
     *   *(Component Diagram planned - see Iteration 1.T2)*
+*   **Data Model Overview:**
+    *   **User**: Single admin user with credentials stored in SQLite (bcrypt hashed passwords)
+    *   **Post**: Markdown files with YAML frontmatter containing title, date, slug, tags, draft status
+    *   **Image**: Files stored in content/images/ with validation and build-time copying
+    *   **Configuration**: YAML file with site settings, build options, server configuration, auth settings
+    *   **Session**: Stateless JWT tokens in httpOnly cookies with configurable expiration
+    *   *(Database ERD planned - see Iteration 1.T3)*
+*   **API Contract Style:** RESTful HTTP API with HTMX enhancement for dynamic interactions, HTML-first responses for progressive enhancement
+    *   *(Initial OpenAPI specification planned - see Iteration 2.T1)*
+*   **Communication Patterns:**
+    *   Synchronous HTTP request/response for page loads and API calls
+    *   HTMX partial updates for dynamic content without full page refreshes
+    *   File system events for configuration hot-reload in development mode
+    *   Atomic file operations for build process with backup/rollback safety
+    *   *(Key sequence diagrams planned - see Iteration 2.T2)*
 ```
 
 ### Context: project-overview (from 01_Plan_Overview_and_Setup.md)
@@ -219,17 +234,43 @@ microblog/
 The following analysis is based on my direct review of the current codebase. Use these notes and tips to guide your implementation.
 
 ### Relevant Existing Code
-*   **File:** `.gitignore`
-    *   **Summary:** Contains basic ignore rules for .codemachine directories and node_modules.
-    *   **Recommendation:** You MUST expand this file to include Python-specific ignores (build/, *.pyc, __pycache__, .env, etc.) and the project-specific ignore patterns mentioned in the directory structure (build/, build.bak/).
+
+*   **File:** `pyproject.toml`
+    *   **Summary:** This file already exists and contains the correct Python package configuration with all required dependencies listed and properly configured.
+    *   **Recommendation:** You SHOULD verify that all dependencies from the architecture manifest are present. The file appears complete with correct version constraints and includes development dependencies, scripts entry points, and tool configurations.
+
+*   **File:** `microblog/__init__.py`
+    *   **Summary:** Basic package initialization file with version information and package description.
+    *   **Recommendation:** The file is properly set up with package metadata. You may need to ensure the version matches across all configuration files.
+
+*   **File:** `microblog/cli.py`
+    *   **Summary:** This file contains a well-structured Click-based CLI implementation with all the required commands (build, serve, create-user, init, status) but with placeholder implementations.
+    *   **Recommendation:** The CLI structure is already correct and follows Click best practices. You MUST keep the existing command structure and option definitions as they align with the specification. The TODO comments indicate where future iterations will implement actual functionality.
+
+*   **File:** `microblog/utils.py`
+    *   **Summary:** Contains utility functions for directory management, file operations, and path resolution that are already being used by the CLI.
+    *   **Recommendation:** You SHOULD use these existing utilities throughout the codebase. The `get_project_root()`, `get_content_dir()`, `get_build_dir()` functions are essential for maintaining consistent path handling.
+
+*   **File:** `requirements.txt`
+    *   **Summary:** Contains all the required dependencies with proper version constraints matching the architecture specification.
+    *   **Recommendation:** The dependencies are already correctly configured. Ensure this file stays synchronized with pyproject.toml dependencies.
 
 ### Implementation Tips & Notes
-*   **Critical:** The project directory is currently empty except for .codemachine artifacts and .gitignore. This is task I1.T1 - the foundation setup task.
-*   **Tip:** You MUST create the complete directory structure as specified in the plan document. Every directory and subdirectory listed should be created.
-*   **Note:** The pyproject.toml should use modern Python packaging standards and include all dependencies listed in the technology stack table.
-*   **Warning:** Pay careful attention to the exact dependencies and versions specified in the technology stack. Use Click for CLI, FastAPI 0.100+, python-markdown, pymdown-extensions, python-jose, passlib[bcrypt], Jinja2, watchfiles, uvicorn, and ruff.
-*   **Tip:** The CLI entry point should be configured in pyproject.toml to expose the `microblog` command.
-*   **Note:** Create placeholder files with appropriate docstrings for all modules to establish the architecture, but don't implement full functionality yet - that's for later tasks.
-*   **Important:** The acceptance criteria states that `microblog --help` must work, so ensure the CLI framework is properly set up with basic commands for build and serve operations.
-*   **Docker:** Include Dockerfile and docker-compose.yml for development environment as specified in target_files.
-*   **Documentation:** Create a comprehensive README.md that explains the project setup and basic usage.
+
+*   **Tip:** The project structure is already 90% complete. Most directories and placeholder files exist, including the complete package structure under `microblog/`, `templates/`, `static/`, `content/`, `tests/`, and `docs/` directories.
+
+*   **Note:** The CLI entry point is already configured in pyproject.toml as `microblog = "microblog.cli:main"`, so the CLI will be installable once the package is installed with `pip install -e .`.
+
+*   **Warning:** The task mentions creating a `.gitignore` file, but one already exists in the repository. You should READ the existing file first before making any changes to avoid overwriting important ignore rules.
+
+*   **Tip:** The existing `README.md` is comprehensive and includes installation instructions, CLI usage, Docker setup, and project status. You should update the project status section to reflect task completion but preserve the existing content structure.
+
+*   **Note:** Docker configuration files (`Dockerfile` and `docker-compose.yml`) already exist and appear to be properly configured for the project needs.
+
+*   **Critical:** The task acceptance criteria mentions that "CLI tool installs successfully" and "`microblog --help` displays command structure". These requirements are already met by the existing code structure.
+
+*   **Tip:** I found that the project uses a `Makefile` for development shortcuts. You should ensure any new commands or processes integrate with the existing Make targets.
+
+*   **Important:** The CLI already imports from `microblog.utils` for path management. You MUST ensure all new code follows this pattern and doesn't hardcode paths.
+
+*   **Note:** The directory structure in the codebase matches exactly with the specification from the planning documents. All required directories are already created with appropriate `__init__.py` files in Python packages.

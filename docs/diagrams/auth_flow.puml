@@ -1,0 +1,163 @@
+@startuml Authentication Flow Sequence Diagram
+!theme amiga
+title JWT-Based Authentication Flow with Security Features
+
+actor "Content Author" as author
+participant "Web Browser" as browser
+participant "Login Page" as login
+participant "Auth Middleware" as auth
+participant "CSRF Service" as csrf
+participant "User Service" as user
+participant "JWT Service" as jwt
+participant "Dashboard App" as dashboard
+database "User Database" as db
+
+== Initial Access & CSRF Setup ==
+author -> browser : Navigate to protected dashboard URL
+browser -> dashboard : GET /dashboard
+dashboard -> auth : Validate JWT cookie
+auth -> dashboard : No valid JWT found
+dashboard -> browser : 302 Redirect to /auth/login
+browser -> login : GET /auth/login
+login -> csrf : Generate CSRF token
+csrf -> login : Return CSRF token
+login -> browser : HTML login form with CSRF token
+browser -> author : Display login form
+
+== Authentication Process ==
+author -> browser : Enter username/password + submit
+browser -> login : POST /auth/login\n(username, password, csrf_token)
+login -> csrf : Validate CSRF token
+alt Invalid CSRF Token
+    csrf -> login : CSRF validation failed
+    login -> browser : 403 Forbidden + error message
+    browser -> author : Show CSRF error
+else Valid CSRF Token
+    csrf -> login : CSRF token valid
+    login -> user : authenticate_user(username, password)
+    user -> db : SELECT user WHERE username = ?
+    db -> user : User record with password_hash
+    user -> user : verify_password(password, stored_hash)\nusing bcrypt
+    alt Invalid Credentials
+        user -> login : Authentication failed
+        login -> browser : 401 Unauthorized + error message
+        browser -> author : Show invalid credentials error
+    else Valid Credentials
+        user -> jwt : create_jwt_token(user_id, username, role)
+        note right of jwt
+            JWT Payload:
+            {
+              "user_id": 1,
+              "username": "admin",
+              "role": "admin",
+              "exp": timestamp + 7200,
+              "iat": current_timestamp
+            }
+        end note
+        jwt -> user : Return signed JWT token
+        user -> login : Return user + JWT token
+        login -> browser : 302 Redirect to /dashboard\n+ Set-Cookie: jwt=token;\n  HttpOnly; Secure; SameSite=Strict;\n  Max-Age=7200
+        browser -> author : Redirect to dashboard
+    end
+end
+
+== Protected Dashboard Access ==
+browser -> dashboard : GET /dashboard (with JWT cookie)
+dashboard -> auth : Extract & validate JWT from cookie
+auth -> jwt : verify_jwt_token(token)
+jwt -> auth : Token valid + user claims
+auth -> dashboard : User authenticated (user_id, role)
+dashboard -> csrf : Generate new CSRF token for dashboard
+csrf -> dashboard : Return CSRF token
+dashboard -> browser : HTML dashboard page\n(includes CSRF token in forms)
+browser -> author : Show authenticated dashboard
+
+== Protected API Operation (with CSRF) ==
+author -> browser : Create new post (fill form)
+browser -> dashboard : POST /api/posts\n(post_data + csrf_token + JWT cookie)
+dashboard -> auth : Validate JWT from cookie
+auth -> jwt : verify_jwt_token(cookie_jwt)
+alt Expired or Invalid JWT
+    jwt -> auth : Token invalid/expired
+    auth -> dashboard : Authentication failed
+    dashboard -> browser : 401 Unauthorized + JSON error
+    browser -> author : Show authentication error
+else Valid JWT
+    jwt -> auth : Token valid + user claims
+    auth -> dashboard : User authenticated
+    dashboard -> csrf : Validate CSRF token from request
+    alt Invalid CSRF Token
+        csrf -> dashboard : CSRF validation failed
+        dashboard -> browser : 403 Forbidden + error message
+        browser -> author : Show CSRF error
+    else Valid CSRF Token
+        csrf -> dashboard : CSRF token valid
+        dashboard -> dashboard : Process post creation
+        dashboard -> browser : 201 Created + HTML fragment\n(new post data)
+        browser -> author : Show success + updated UI
+    end
+end
+
+== Session Expiration Handling ==
+note over browser, dashboard
+    After 2 hours (7200 seconds), JWT expires
+end note
+browser -> dashboard : GET /dashboard/posts/new\n(with expired JWT cookie)
+dashboard -> auth : Extract & validate JWT from cookie
+auth -> jwt : verify_jwt_token(expired_token)
+jwt -> auth : Token expired error
+auth -> dashboard : Authentication failed (expired)
+dashboard -> browser : 401 Unauthorized +\nRedirect to /auth/login
+browser -> author : Redirect to login page
+
+== Logout Process ==
+author -> browser : Click logout button
+browser -> dashboard : POST /auth/logout\n(with CSRF token)
+dashboard -> csrf : Validate CSRF token
+csrf -> dashboard : CSRF token valid
+dashboard -> browser : 302 Redirect to /auth/login\n+ Set-Cookie: jwt=;\n  Expires=Thu, 01 Jan 1970 00:00:00 GMT;\n  HttpOnly; Secure; SameSite=Strict
+browser -> author : Redirect to login page\n(JWT cookie cleared)
+
+== Session Validation API ==
+note over browser, dashboard
+    For AJAX/HTMX session checks
+end note
+browser -> dashboard : GET /auth/check (with JWT cookie)
+dashboard -> auth : Validate JWT from cookie
+auth -> jwt : verify_jwt_token(token)
+alt Valid Session
+    jwt -> auth : Token valid + user claims
+    auth -> dashboard : Session valid
+    dashboard -> browser : 200 OK + JSON\n{"valid": true, "user": "admin"}
+else Invalid/Expired Session
+    jwt -> auth : Token invalid/expired
+    auth -> dashboard : Session invalid
+    dashboard -> browser : 401 Unauthorized + JSON\n{"valid": false}
+end
+
+== Security Features Summary ==
+note over author, db
+    **Cookie Security:**
+    - HttpOnly: Prevents XSS access to JWT
+    - Secure: HTTPS-only transmission
+    - SameSite=Strict: CSRF protection
+    - Max-Age=7200: 2-hour expiration
+
+    **CSRF Protection:**
+    - Synchronizer token pattern
+    - Required for all state-changing operations
+    - Token included in forms and validated
+
+    **JWT Security:**
+    - Stateless authentication
+    - Configurable expiration (default 2h)
+    - Signed with 32+ character secret
+    - Contains user claims for authorization
+
+    **Password Security:**
+    - Bcrypt hashing with cost ≥12
+    - No plaintext storage
+    - Secure credential verification
+end note
+
+@enduml

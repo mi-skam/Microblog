@@ -1,0 +1,140 @@
+{
+  "$defs": {
+    "AuthConfig": {
+      "description": "Authentication configuration settings.",
+      "properties": {
+        "jwt_secret": {
+          "maxLength": 255,
+          "minLength": 32,
+          "title": "Jwt Secret",
+          "type": "string"
+        },
+        "session_expires": {
+          "default": 7200,
+          "minimum": 60,
+          "title": "Session Expires",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "jwt_secret"
+      ],
+      "title": "AuthConfig",
+      "type": "object"
+    },
+    "BuildConfig": {
+      "description": "Build-related configuration settings.",
+      "properties": {
+        "output_dir": {
+          "default": "build",
+          "maxLength": 100,
+          "title": "Output Dir",
+          "type": "string"
+        },
+        "backup_dir": {
+          "default": "build.bak",
+          "maxLength": 100,
+          "title": "Backup Dir",
+          "type": "string"
+        },
+        "posts_per_page": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Posts Per Page",
+          "type": "integer"
+        }
+      },
+      "title": "BuildConfig",
+      "type": "object"
+    },
+    "ServerConfig": {
+      "description": "Server configuration settings.",
+      "properties": {
+        "host": {
+          "default": "127.0.0.1",
+          "maxLength": 100,
+          "title": "Host",
+          "type": "string"
+        },
+        "port": {
+          "default": 8000,
+          "maximum": 65535,
+          "minimum": 1024,
+          "title": "Port",
+          "type": "integer"
+        },
+        "hot_reload": {
+          "default": false,
+          "title": "Hot Reload",
+          "type": "boolean"
+        }
+      },
+      "title": "ServerConfig",
+      "type": "object"
+    },
+    "SiteConfig": {
+      "description": "Site-level configuration settings.",
+      "properties": {
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "pattern": "^https?://.+",
+          "title": "Url",
+          "type": "string"
+        },
+        "author": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Author",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "title",
+        "url",
+        "author"
+      ],
+      "title": "SiteConfig",
+      "type": "object"
+    }
+  },
+  "description": "Main application configuration model.",
+  "properties": {
+    "site": {
+      "$ref": "#/$defs/SiteConfig"
+    },
+    "build": {
+      "$ref": "#/$defs/BuildConfig"
+    },
+    "server": {
+      "$ref": "#/$defs/ServerConfig"
+    },
+    "auth": {
+      "$ref": "#/$defs/AuthConfig"
+    }
+  },
+  "required": [
+    "site",
+    "auth"
+  ],
+  "title": "AppConfig",
+  "type": "object"
+}

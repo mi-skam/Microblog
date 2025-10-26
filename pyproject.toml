@@ -1,0 +1,92 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "microblog"
+version = "0.1.0"
+description = "A lightweight, self-hosted blogging platform that generates static HTML pages with a dynamic dashboard"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+keywords = ["blog", "static-site-generator", "cms", "markdown"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP :: Site Management",
+    "Topic :: Text Processing :: Markup :: Markdown",
+]
+
+dependencies = [
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.23.0",
+    "click>=8.1.0",
+    "jinja2>=3.1.0",
+    "markdown>=3.5.0",
+    "pymdown-extensions>=10.0.0",
+    "python-frontmatter>=1.0.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.0",
+    "watchfiles>=0.20.0",
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0.0",
+    "aiofiles>=23.0.0",
+    "python-multipart>=0.0.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.0",
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "httpx>=0.25.0",
+    "pytest-cov>=4.1.0",
+]
+
+[project.scripts]
+microblog = "microblog.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/microblog"
+Repository = "https://github.com/yourusername/microblog"
+Issues = "https://github.com/yourusername/microblog/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["microblog*"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--cov=microblog --cov-report=term-missing"

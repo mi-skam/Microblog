@@ -5,9 +5,10 @@ This module provides database setup, initialization, and utility functions
 for the SQLite-based authentication system.
 """
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
-from typing import Optional
 
 from microblog.auth.models import User
 from microblog.auth.password import hash_password
@@ -26,7 +27,7 @@ def get_database_path() -> Path:
     return get_project_root() / "microblog.db"
 
 
-def init_database(db_path: Optional[Path] = None) -> bool:
+def init_database(db_path: Path | None = None) -> bool:
     """
     Initialize the database with required tables.
 
@@ -58,8 +59,8 @@ def create_admin_user(
     username: str,
     email: str,
     password: str,
-    db_path: Optional[Path] = None
-) -> Optional[User]:
+    db_path: Path | None = None
+) -> User | None:
     """
     Create the admin user if none exists.
 
@@ -110,7 +111,7 @@ def create_admin_user(
         raise
 
 
-def get_admin_user(db_path: Optional[Path] = None) -> Optional[User]:
+def get_admin_user(db_path: Path | None = None) -> User | None:
     """
     Get the admin user from the database.
 
@@ -142,8 +143,8 @@ def get_admin_user(db_path: Optional[Path] = None) -> Optional[User]:
                         email=row["email"],
                         password_hash=row["password_hash"],
                         role=row["role"],
-                        created_at=row["created_at"],
-                        updated_at=row["updated_at"]
+                        created_at=User._parse_datetime(row["created_at"]),
+                        updated_at=User._parse_datetime(row["updated_at"])
                     )
         return None
 
@@ -152,7 +153,7 @@ def get_admin_user(db_path: Optional[Path] = None) -> Optional[User]:
         return None
 
 
-def database_exists(db_path: Optional[Path] = None) -> bool:
+def database_exists(db_path: Path | None = None) -> bool:
     """
     Check if the database file exists.
 
@@ -168,7 +169,7 @@ def database_exists(db_path: Optional[Path] = None) -> bool:
     return db_path.exists()
 
 
-def setup_database_if_needed(db_path: Optional[Path] = None) -> bool:
+def setup_database_if_needed(db_path: Path | None = None) -> bool:
     """
     Set up the database if it doesn't exist or is incomplete.
 
@@ -194,7 +195,7 @@ def setup_database_if_needed(db_path: Optional[Path] = None) -> bool:
         return False
 
 
-def reset_database(db_path: Optional[Path] = None) -> bool:
+def reset_database(db_path: Path | None = None) -> bool:
     """
     Reset the database by removing it (for development/testing).
 
@@ -219,7 +220,7 @@ def reset_database(db_path: Optional[Path] = None) -> bool:
         return False
 
 
-def get_database_info(db_path: Optional[Path] = None) -> dict:
+def get_database_info(db_path: Path | None = None) -> dict:
     """
     Get information about the database state.
 

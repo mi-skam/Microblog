@@ -5,8 +5,9 @@ This module provides JWT token creation and validation using the configured
 JWT secret and expiration settings from the configuration system.
 """
 
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from jose import JWTError, jwt
 
@@ -50,10 +51,10 @@ def create_jwt_token(user_id: int, username: str) -> str:
         token = jwt.encode(payload, config.auth.jwt_secret, algorithm="HS256")
         return token
     except JWTError as e:
-        raise RuntimeError(f"Failed to create JWT token: {e}")
+        raise RuntimeError(f"Failed to create JWT token: {e}") from None
 
 
-def verify_jwt_token(token: str) -> Optional[dict]:
+def verify_jwt_token(token: str) -> dict | None:
     """
     Verify and decode a JWT token.
 
@@ -95,7 +96,7 @@ def verify_jwt_token(token: str) -> Optional[dict]:
         return None
 
 
-def decode_jwt_token_unsafe(token: str) -> Optional[dict]:
+def decode_jwt_token_unsafe(token: str) -> dict | None:
     """
     Decode JWT token without verification (for debugging/inspection).
 
@@ -118,7 +119,7 @@ def decode_jwt_token_unsafe(token: str) -> Optional[dict]:
         return None
 
 
-def get_token_expiry(token: str) -> Optional[datetime]:
+def get_token_expiry(token: str) -> datetime | None:
     """
     Get the expiration time of a JWT token without full verification.
 
@@ -159,7 +160,7 @@ def is_token_expired(token: str) -> bool:
     return expiry < datetime.now(timezone.utc)
 
 
-def refresh_token(token: str) -> Optional[str]:
+def refresh_token(token: str) -> str | None:
     """
     Create a new token with refreshed expiration if the current token is valid.
 

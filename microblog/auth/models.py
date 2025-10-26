@@ -5,12 +5,11 @@ This module provides the User model with SQLite database integration following
 the single-admin-user pattern specified in the ERD.
 """
 
+from __future__ import annotations
+
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
-
-from microblog.utils import get_project_root
 
 
 class User:
@@ -28,8 +27,8 @@ class User:
         email: str,
         password_hash: str,
         role: str = "admin",
-        created_at: Optional[datetime] = None,
-        updated_at: Optional[datetime] = None
+        created_at: datetime | None = None,
+        updated_at: datetime | None = None
     ):
         self.user_id = user_id
         self.username = username
@@ -57,7 +56,7 @@ class User:
             conn.commit()
 
     @classmethod
-    def get_by_username(cls, username: str, db_path: Path) -> Optional["User"]:
+    def get_by_username(cls, username: str, db_path: Path) -> User | None:
         """Get user by username."""
         with sqlite3.connect(db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -73,13 +72,13 @@ class User:
                     email=row["email"],
                     password_hash=row["password_hash"],
                     role=row["role"],
-                    created_at=datetime.fromisoformat(row["created_at"]),
-                    updated_at=datetime.fromisoformat(row["updated_at"])
+                    created_at=cls._parse_datetime(row["created_at"]),
+                    updated_at=cls._parse_datetime(row["updated_at"])
                 )
             return None
 
     @classmethod
-    def get_by_id(cls, user_id: int, db_path: Path) -> Optional["User"]:
+    def get_by_id(cls, user_id: int, db_path: Path) -> User | None:
         """Get user by ID."""
         with sqlite3.connect(db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -95,8 +94,8 @@ class User:
                     email=row["email"],
                     password_hash=row["password_hash"],
                     role=row["role"],
-                    created_at=datetime.fromisoformat(row["created_at"]),
-                    updated_at=datetime.fromisoformat(row["updated_at"])
+                    created_at=cls._parse_datetime(row["created_at"]),
+                    updated_at=cls._parse_datetime(row["updated_at"])
                 )
             return None
 
@@ -115,7 +114,7 @@ class User:
         email: str,
         password_hash: str,
         db_path: Path
-    ) -> Optional["User"]:
+    ) -> User | None:
         """
         Create a new user. Only one admin user is allowed.
 
@@ -176,6 +175,23 @@ class User:
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat()
         }
+
+    @staticmethod
+    def _parse_datetime(dt_str: str) -> datetime:
+        """Parse datetime string from SQLite, handling both ISO and SQLite default formats."""
+        if not dt_str:
+            return datetime.now(timezone.utc)
+
+        try:
+            # Try ISO format first (for manually inserted timestamps)
+            return datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+        except ValueError:
+            try:
+                # Try SQLite CURRENT_TIMESTAMP format: "YYYY-MM-DD HH:MM:SS"
+                return datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+            except ValueError:
+                # Fallback to current time if parsing fails
+                return datetime.now(timezone.utc)
 
     def __repr__(self) -> str:
         return f"<User(id={self.user_id}, username='{self.username}', role='{self.role}')>"

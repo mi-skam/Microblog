@@ -7,7 +7,6 @@ with a minimum cost factor of 12 as specified in the requirements.
 
 import bcrypt
 
-
 # Cost factor for bcrypt (minimum 12 as required)
 BCRYPT_ROUNDS = 12
 

@@ -10,18 +10,18 @@ This is the full specification of the task you must complete.
 
 ```json
 {
-  "task_id": "I2.T2",
+  "task_id": "I2.T3",
   "iteration_id": "I2",
   "iteration_goal": "Implement authentication system with JWT tokens, user management, and core data models for posts and images",
-  "description": "Generate authentication flow sequence diagram showing JWT-based login process, session management, and dashboard access protection. Include httpOnly cookie handling and CSRF protection.",
-  "agent_type_hint": "DiagrammingAgent",
-  "inputs": "Authentication requirements from specification, JWT workflow, security considerations",
-  "target_files": ["docs/diagrams/auth_flow.puml"],
-  "input_files": ["docs/api/openapi.yaml"],
-  "deliverables": "PlantUML sequence diagram showing complete authentication workflow",
-  "acceptance_criteria": "Diagram accurately shows JWT token lifecycle, cookie handling is illustrated, CSRF protection flow included, all security steps documented",
-  "dependencies": ["I2.T1"],
-  "parallelizable": true,
+  "description": "Implement User model with SQLite database, bcrypt password hashing, and JWT token management. Create database schema and user creation utilities.",
+  "agent_type_hint": "BackendAgent",
+  "inputs": "User model specification, security requirements (bcrypt cost ≥12), JWT configuration",
+  "target_files": ["microblog/auth/models.py", "microblog/auth/jwt_handler.py", "microblog/auth/password.py", "microblog/database.py"],
+  "input_files": ["microblog/server/config.py", "docs/diagrams/database_erd.puml"],
+  "deliverables": "User SQLite model, password hashing utilities, JWT token generation/validation, database initialization",
+  "acceptance_criteria": "User creation works correctly, passwords hash with bcrypt cost ≥12, JWT tokens generate and validate properly, database initializes automatically",
+  "dependencies": ["I1.T4"],
+  "parallelizable": false,
   "done": false
 }
 ```
@@ -31,6 +31,79 @@ This is the full specification of the task you must complete.
 ## 2. Architectural & Planning Context
 
 The following are the relevant sections from the architecture and plan documents, which I found by analyzing the task description.
+
+### Context: key-entities (from 03_System_Structure_and_Data.md)
+
+```markdown
+**Key Entities:**
+
+1. **User**: Single admin user with authentication credentials (stored in SQLite)
+2. **Post**: Blog posts with metadata and content (stored as markdown files with YAML frontmatter)
+3. **Image**: Media files referenced in posts (stored in filesystem with metadata tracking)
+4. **Configuration**: System settings and blog metadata (stored as YAML configuration file)
+5. **Session**: Authentication sessions (stateless JWT tokens, no persistent storage)
+```
+
+### Context: data-model-diagram (from 03_System_Structure_and_Data.md)
+
+```markdown
+**Diagram (PlantUML - ERD):**
+```plantuml
+@startuml
+
+' SQLite Database Entities
+entity "User" as user {
+  *user_id : INTEGER <<PK>>
+  --
+  username : VARCHAR(50) <<UNIQUE>>
+  email : VARCHAR(255) <<UNIQUE>>
+  password_hash : VARCHAR(255)
+  role : VARCHAR(10) = 'admin'
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+' JWT Token (stateless, no storage)
+entity "JWT Session" as session {
+  --
+  **Token Claims**
+  user_id : INTEGER
+  username : VARCHAR(50)
+  exp : TIMESTAMP
+  iat : TIMESTAMP
+  --
+  **Storage**
+  stored_in : httpOnly Cookie
+  signed_with : auth.jwt_secret
+}
+
+' Relationships
+user ||--o{ session : "generates"
+
+note top of user : Single record only\nRole fixed to 'admin'\nStored in SQLite
+note top of session : Stateless JWT in httpOnly cookie\nNo database storage required\nExpires per configuration
+
+@enduml
+```
+```
+
+### Context: data-storage-strategy (from 03_System_Structure_and_Data.md)
+
+```markdown
+**Data Storage Strategy:**
+
+**SQLite Database (microblog.db):**
+- Stores single user authentication record
+- Lightweight, serverless, no external dependencies
+- Automatic schema creation on first run
+- Handles concurrent read access (dashboard operations)
+
+**Performance Considerations:**
+- File system operations optimized for sequential reading during builds
+- SQLite provides excellent performance for single-user authentication
+- Content directory structure designed for efficient traversal
+- Build output optimized for CDN and static hosting performance
+```
 
 ### Context: authentication-authorization (from 05_Operational_Architecture.md)
 
@@ -71,196 +144,20 @@ def authenticate_user(username: str, password: str) -> Optional[User]:
 - **Session Validation**: Automatic token expiration and renewal handling
 ```
 
-### Context: key-interaction-flow (from 04_Behavior_and_Communication.md)
+### Context: task-i2-t3 (from 02_Iteration_I2.md)
 
 ```markdown
-**Key Interaction Flow (Sequence Diagram):**
-
-**Description:** This diagram illustrates the complete workflow for user authentication and post creation, showing the interaction between the web browser, dashboard application, authentication system, and content storage.
-
-**Diagram (PlantUML):**
-```plantuml
-@startuml
-actor "Content Author" as author
-participant "Web Browser" as browser
-participant "Dashboard App" as dashboard
-participant "Auth Middleware" as auth
-participant "Post Service" as posts
-participant "Content Storage" as storage
-participant "Static Generator" as generator
-participant "Build Output" as build
-
-== Authentication Flow ==
-author -> browser : Enter credentials and login
-browser -> dashboard : POST /auth/login (username, password)
-dashboard -> auth : Validate credentials
-auth -> dashboard : JWT token
-dashboard -> browser : Set httpOnly cookie + redirect
-browser -> author : Show dashboard interface
-
-== Post Creation Flow ==
-author -> browser : Click "New Post"
-browser -> dashboard : GET /dashboard/posts/new
-dashboard -> browser : HTML form with CSRF token
-author -> browser : Fill form (title, content, tags)
-browser -> dashboard : POST /api/posts (HTMX request)
-
-dashboard -> auth : Validate JWT from cookie
-auth -> dashboard : User authenticated
-
-dashboard -> posts : Create post with metadata
-posts -> storage : Write markdown file
-storage -> posts : File created successfully
-posts -> dashboard : Post created
-
-dashboard -> generator : Trigger build process
-generator -> storage : Read all content files
-storage -> generator : Content data
-generator -> build : Generate static HTML
-build -> generator : Build completed
-generator -> dashboard : Build status
-
-dashboard -> browser : HTML fragment with success message
-browser -> author : Show updated post list + success
-
-== Live Preview Flow ==
-author -> browser : Type in markdown editor
-note right : 500ms debounce
-browser -> dashboard : POST /api/preview (HTMX)
-dashboard -> posts : Render markdown
-posts -> dashboard : HTML preview
-dashboard -> browser : HTML fragment
-browser -> author : Live preview updated
-
-@enduml
-```
-```
-
-### Context: security-considerations (from 05_Operational_Architecture.md)
-
-```markdown
-**Security Considerations:**
-
-**Input Validation & Sanitization:**
-- **Markdown Sanitization**: HTML escaping by default to prevent XSS attacks
-- **File Upload Validation**: Extension whitelist, MIME type verification, size limits
-- **Path Traversal Prevention**: Filename sanitization and directory boundary enforcement
-- **SQL Injection Prevention**: Parameterized queries for all database operations
-- **Command Injection Prevention**: No direct shell execution from user input
-
-**Security Headers:**
-```python
-# Security middleware configuration
-SECURITY_HEADERS = {
-    "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "DENY",
-    "X-XSS-Protection": "1; mode=block",
-    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-    "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline'"
-}
-```
-
-**Data Protection:**
-- **Secrets Management**: JWT secret stored in configuration with minimum 32-character requirement
-- **Database Security**: SQLite file permissions restricted to application user
-- **File System Security**: Content directory permissions preventing unauthorized access
-- **Backup Security**: Build backups stored with same security constraints as primary data
-
-**Vulnerability Mitigation:**
-- **Rate Limiting**: Authentication endpoint protection against brute force attacks
-- **CSRF Protection**: Synchronizer token pattern for all state-changing operations
-- **Session Security**: Automatic token expiration and secure cookie attributes
-- **Dependency Scanning**: Regular security updates for Python dependencies
-```
-
-### Context: authentication endpoints (from docs/api/openapi.yaml)
-
-```markdown
-  /auth/login:
-    post:
-      tags:
-        - Authentication
-      summary: User authentication
-      description: |
-        Authenticate user with credentials and return JWT token in httpOnly cookie.
-        Validates username/password and sets secure session cookie.
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              required:
-                - username
-                - password
-                - csrf_token
-              properties:
-                username:
-                  type: string
-                  minLength: 1
-                  maxLength: 100
-                  description: Username for authentication
-                password:
-                  type: string
-                  minLength: 1
-                  maxLength: 255
-                  description: Password for authentication
-                csrf_token:
-                  type: string
-                  description: CSRF protection token
-      responses:
-        '302':
-          description: Authentication successful, redirect to dashboard
-          headers:
-            Location:
-              schema:
-                type: string
-                example: /dashboard
-            Set-Cookie:
-              schema:
-                type: string
-                example: jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...; HttpOnly; Secure; SameSite=Strict; Max-Age=7200
-
-  /auth/logout:
-    post:
-      tags:
-        - Authentication
-      summary: User logout
-      description: Terminate session and clear authentication cookie
-      responses:
-        '302':
-          description: Logout successful, redirect to login
-          headers:
-            Location:
-              schema:
-                type: string
-                example: /auth/login
-            Set-Cookie:
-              schema:
-                type: string
-                example: jwt=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Strict
-
-  /auth/check:
-    get:
-      tags:
-        - Authentication
-      summary: Session validation
-      description: Validate current session for protected routes
-      responses:
-        '200':
-          description: Valid session
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  valid:
-                    type: boolean
-                    example: true
-                  user:
-                    type: string
-                    example: admin
+*   **Task 2.3:**
+    *   **Task ID:** `I2.T3`
+    *   **Description:** Implement User model with SQLite database, bcrypt password hashing, and JWT token management. Create database schema and user creation utilities.
+    *   **Agent Type Hint:** `BackendAgent`
+    *   **Inputs:** User model specification, security requirements (bcrypt cost ≥12), JWT configuration
+    *   **Input Files:** ["microblog/server/config.py", "docs/diagrams/database_erd.puml"]
+    *   **Target Files:** ["microblog/auth/models.py", "microblog/auth/jwt_handler.py", "microblog/auth/password.py", "microblog/database.py"]
+    *   **Deliverables:** User SQLite model, password hashing utilities, JWT token generation/validation, database initialization
+    *   **Acceptance Criteria:** User creation works correctly, passwords hash with bcrypt cost ≥12, JWT tokens generate and validate properly, database initializes automatically
+    *   **Dependencies:** `I1.T4`
+    *   **Parallelizable:** No
 ```
 
 ---
@@ -270,39 +167,25 @@ SECURITY_HEADERS = {
 The following analysis is based on my direct review of the current codebase. Use these notes and tips to guide your implementation.
 
 ### Relevant Existing Code
-
-*   **File:** `docs/api/openapi.yaml`
-    *   **Summary:** Complete OpenAPI v3 specification already created (task I2.T1) that defines all authentication endpoints, security schemes, and data models including JWT cookie authentication and CSRF protection.
-    *   **Recommendation:** You MUST use this OpenAPI specification as the authoritative source for authentication flow details. The endpoints /auth/login, /auth/logout, and /auth/check are fully documented with request/response formats.
-
 *   **File:** `microblog/server/config.py`
-    *   **Summary:** Comprehensive configuration management system with AuthConfig that includes JWT secret requirements (minimum 32 characters) and session expiration settings (default 2 hours).
-    *   **Recommendation:** You SHOULD reference the AuthConfig model when showing JWT configuration in your diagram, particularly the session_expires setting.
-
-*   **File:** `content/_data/config.yaml`
-    *   **Summary:** Default configuration file showing jwt_secret and session_expires settings that will be used by the authentication system.
-    *   **Recommendation:** You can reference these specific configuration values in your diagram to show realistic JWT expiration timeframes.
-
-*   **File:** `microblog/cli.py`
-    *   **Summary:** CLI includes a create_user command (currently TODO placeholder) that will handle initial user creation for the single-user system.
-    *   **Recommendation:** Your authentication flow diagram should account for the fact that user creation happens via CLI, not through the web interface.
+    *   **Summary:** This file contains the complete configuration management system with Pydantic models for AuthConfig including jwt_secret and session_expires settings. It has a fully functional ConfigManager class with YAML loading and validation.
+    *   **Recommendation:** You MUST import and use the `AuthConfig` class from this file for JWT configuration. Use `get_config()` function to access configuration settings including auth.jwt_secret and auth.session_expires.
+*   **File:** `microblog/utils.py`
+    *   **Summary:** This file provides utility functions including ensure_directory() for creating directories and get_project_root() for path management.
+    *   **Recommendation:** You SHOULD use the `ensure_directory()` function when creating database directory structure and `get_project_root()` for database file placement.
+*   **File:** `pyproject.toml`
+    *   **Summary:** This file defines all project dependencies including `python-jose[cryptography]` for JWT handling and `passlib[bcrypt]` for password hashing.
+    *   **Recommendation:** You MUST use the already declared dependencies. Import `jose.jwt` for JWT operations and `passlib.context.CryptContext` for bcrypt password hashing.
+*   **File:** `docs/diagrams/database_erd.puml`
+    *   **Summary:** This file contains the complete User entity definition with all required fields: user_id (PK), username, email, password_hash, role, created_at, updated_at.
+    *   **Recommendation:** You MUST implement the exact schema defined in this ERD. Note that role is fixed to 'admin' and the system supports only a single user record.
 
 ### Implementation Tips & Notes
-
-*   **Tip:** The existing architectural documentation shows a detailed sequence diagram template in 04_Behavior_and_Communication.md that you SHOULD use as a structural reference for your authentication flow diagram.
-*   **Note:** The system uses a single-user design pattern - your diagram should reflect that there's only one admin user with full system access, not a multi-user system.
-*   **Security Focus:** The OpenAPI spec and architecture docs emphasize several security features that MUST be included in your diagram:
-    - httpOnly, Secure, SameSite=Strict cookie attributes
-    - CSRF token validation for state-changing operations
-    - JWT token expiration and renewal handling
-    - Rate limiting on authentication endpoints (future enhancement)
-*   **Dependencies Available:** The pyproject.toml shows python-jose[cryptography] and passlib[bcrypt] are available for JWT handling and password hashing - these libraries should be referenced in any implementation details.
-*   **Diagram Location:** Your target file `docs/diagrams/auth_flow.puml` should be placed alongside existing component_diagram.puml and database_erd.puml files.
-
-### Critical Requirements from Task Description
-
-*   **JWT Token Lifecycle:** Show complete flow from credential validation to token creation, storage in httpOnly cookie, and eventual expiration
-*   **Cookie Handling:** Illustrate secure cookie attributes (httpOnly, Secure, SameSite=Strict) and cookie clearing on logout
-*   **CSRF Protection:** Show how CSRF tokens are generated, included in forms, and validated on state-changing operations
-*   **Dashboard Access Protection:** Demonstrate how middleware validates JWT tokens before allowing access to protected dashboard routes
-*   **Session Management:** Include automatic token expiration handling and session validation for ongoing requests
+*   **Tip:** The configuration system is already complete. Use `from microblog.server.config import get_config` to access authentication settings including JWT secret and session expiration time.
+*   **Note:** The project uses Python 3.10+ with type hints throughout. You MUST follow the same typing patterns seen in config.py (using `|` for unions and modern type annotations).
+*   **Warning:** The ERD specifies that the system supports exactly one admin user. Your User model should account for this constraint and prevent multiple user creation.
+*   **Database Location:** You SHOULD place the SQLite database file at the project root level (same level as pyproject.toml) and name it `microblog.db` for consistency.
+*   **Security Requirement:** The bcrypt cost factor MUST be ≥12 as specified in the acceptance criteria. Use PassLib's CryptContext with bcrypt scheme.
+*   **JWT Secret:** The JWT secret is validated to be at least 32 characters in the configuration system. Use this for signing tokens.
+*   **Directory Structure:** The `microblog/auth/` directory already exists but is empty. You MUST create the required files there following the target_files specification.
+*   **Testing Support:** The existing `tests/conftest.py` provides excellent patterns for test fixtures and temporary file handling that you can reference for testing your authentication system.

@@ -1,12 +1,23 @@
 openapi: 3.0.3
 info:
-  title: Microblog API
+  title: MicroBlog API
   description: |
-    RESTful API with HTMX enhancement for the Microblog system.
+    RESTful HTTP API with HTMX enhancement for the MicroBlog static site generator.
 
-    This API provides a hybrid static-first architecture with HTML-first responses
-    for progressive enhancement through HTMX interactions. The system supports
-    single-user authentication with JWT tokens and comprehensive content management.
+    This API provides authentication, content management, and build functionality
+    for a single-user blogging platform. The API follows a "HTML-first" design
+    pattern where endpoints primarily return HTML fragments for HTMX consumption,
+    with JSON responses available for API-style interactions.
+
+    ## Authentication
+    - JWT tokens stored in httpOnly cookies for security
+    - CSRF protection on all state-changing operations
+    - Single-user authentication model
+
+    ## Response Formats
+    - Primary: HTML fragments for HTMX interactions
+    - Secondary: JSON for API consumption
+    - Content-Type negotiation based on Accept header
 
     ## Key Features
     - JWT-based single-user authentication
@@ -15,10 +26,11 @@ info:
     - Content management with markdown processing
     - Image upload and management
     - Atomic build process with backup/rollback
+    - Configuration management with hot-reload support
 
   version: 1.0.0
   contact:
-    name: Microblog API Support
+    name: MicroBlog API Support
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
@@ -26,11 +38,11 @@ info:
 servers:
   - url: http://127.0.0.1:8000
     description: Development server
-  - url: https://example.com
+  - url: https://yourdomain.com
     description: Production server
 
 security:
-  - JWTAuth: []
+  - JWTCookie: []
   - CSRFToken: []
 
 paths:
@@ -244,8 +256,58 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  # HTMX API Endpoints
+  # HTMX API Endpoints for Posts
   /api/posts:
+    get:
+      tags:
+        - Posts API
+      summary: List all posts
+      description: |
+        Retrieve paginated list of posts with optional filtering.
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          description: Posts per page
+        - name: draft
+          in: query
+          schema:
+            type: boolean
+          description: Filter by draft status
+        - name: tag
+          in: query
+          schema:
+            type: string
+          description: Filter by tag
+      responses:
+        '200':
+          description: List of posts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostsList'
+            text/html:
+              schema:
+                type: string
+                description: HTML fragment with posts list
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
     post:
       tags:
         - Posts API
@@ -302,6 +364,44 @@ paths:
                 description: HTML validation error fragment for HTMX
 
   /api/posts/{id}:
+    get:
+      tags:
+        - Posts API
+      summary: Get specific post
+      description: |
+        Retrieve a specific post by ID.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]+$'
+          description: Post ID
+      responses:
+        '200':
+          description: Post details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+            text/html:
+              schema:
+                type: string
+                description: HTML fragment with post details
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
     put:
       tags:
         - Posts API
@@ -424,6 +524,16 @@ paths:
           schema:
             type: string
             pattern: '^[a-zA-Z0-9\-_]+$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                draft:
+                  type: boolean
+                  description: Set to false to publish, true to make draft
       responses:
         '200':
           description: Publication status toggled successfully
@@ -504,6 +614,30 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+    get:
+      tags:
+        - Build API
+      summary: Get build status
+      description: |
+        Get current build status and progress information.
+      responses:
+        '200':
+          description: Current build status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildStatus'
+            text/html:
+              schema:
+                type: string
+                description: HTML fragment with build status
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/images:
     post:
       tags:
@@ -564,18 +698,92 @@ paths:
               schema:
                 $ref: '#/components/schemas/ValidationErrorResponse'
 
+  # Configuration Management Endpoints
+  /api/config:
+    get:
+      tags:
+        - Configuration API
+      summary: Get current configuration
+      description: |
+        Retrieve current application configuration.
+      responses:
+        '200':
+          description: Current configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppConfig'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags:
+        - Configuration API
+      summary: Update configuration
+      description: |
+        Update application configuration with validation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppConfig'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AppConfig'
+      responses:
+        '200':
+          description: Configuration updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppConfig'
+            text/html:
+              schema:
+                type: string
+                description: HTML fragment with success message
+        '400':
+          description: Invalid configuration data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Invalid CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+
 components:
   securitySchemes:
-    JWTAuth:
+    JWTCookie:
       type: apiKey
       in: cookie
       name: jwt
-      description: JWT token stored in httpOnly cookie for authentication
+      description: JWT token stored in httpOnly cookie
+
     CSRFToken:
       type: apiKey
       in: header
       name: X-CSRF-Token
-      description: CSRF protection token required for state-changing operations
+      description: CSRF protection token for state-changing operations
 
   schemas:
     # Site Configuration Models
@@ -679,6 +887,51 @@ components:
           $ref: '#/components/schemas/ServerConfig'
         auth:
           $ref: '#/components/schemas/AuthConfig'
+
+    # Post List Response Schema
+    PostsList:
+      type: object
+      properties:
+        posts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Post'
+        total:
+          type: integer
+          description: Total number of posts
+        page:
+          type: integer
+          description: Current page number
+        pages:
+          type: integer
+          description: Total number of pages
+
+    # Build Status Schema
+    BuildStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [idle, building, success, error]
+          description: Current build status
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Build progress percentage
+        message:
+          type: string
+          description: Current build step or error message
+        started_at:
+          type: string
+          format: date-time
+          description: Build start time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          description: Build completion time
+          nullable: true
 
     # Post Models
     Post:
@@ -875,3 +1128,9 @@ tags:
     description: Site build and generation operations
   - name: Images API
     description: Image upload and management
+  - name: Configuration API
+    description: Application configuration management
+
+externalDocs:
+  description: MicroBlog Documentation
+  url: https://github.com/yourusername/microblog/docs

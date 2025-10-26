@@ -1,0 +1,48 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+Container(dashboard_app, "Dashboard Web App", "FastAPI + HTMX", "Content management interface") {
+    Component(auth_routes, "Authentication Routes", "FastAPI Router", "Handles login, logout, and session management")
+    Component(dashboard_routes, "Dashboard Routes", "FastAPI Router", "Serves HTML pages for post management")
+    Component(api_routes, "HTMX API Routes", "FastAPI Router", "Handles AJAX requests for dynamic interactions")
+
+    Component(auth_middleware, "Auth Middleware", "FastAPI Middleware", "Validates JWT tokens and protects routes")
+    Component(csrf_middleware, "CSRF Middleware", "FastAPI Middleware", "Prevents cross-site request forgery")
+
+    Component(post_service, "Post Management Service", "Python Service", "Business logic for post CRUD operations")
+    Component(build_service, "Build Management Service", "Python Service", "Orchestrates static site generation")
+    Component(image_service, "Image Management Service", "Python Service", "Handles image upload and organization")
+
+    Component(content_repository, "Content Repository", "File System Access", "Reads/writes markdown files and images")
+    Component(user_repository, "User Repository", "SQLite Access", "Manages user authentication data")
+    Component(config_manager, "Configuration Manager", "YAML File Access", "Loads and validates configuration")
+}
+
+ContainerDb_Ext(user_db, "User Database", "SQLite")
+ContainerDb_Ext(content_store, "Content Storage", "File System")
+Container_Ext(static_generator, "Static Site Generator", "Python")
+
+Rel(auth_routes, auth_middleware, "Uses")
+Rel(dashboard_routes, auth_middleware, "Protected by")
+Rel(api_routes, auth_middleware, "Protected by")
+Rel(api_routes, csrf_middleware, "Protected by")
+
+Rel(auth_routes, user_repository, "Authenticates")
+Rel(dashboard_routes, post_service, "Uses")
+Rel(api_routes, post_service, "Uses")
+Rel(api_routes, build_service, "Uses")
+Rel(api_routes, image_service, "Uses")
+
+Rel(post_service, content_repository, "Uses")
+Rel(build_service, static_generator, "Triggers")
+Rel(image_service, content_repository, "Uses")
+
+Rel(content_repository, content_store, "Accesses", "File I/O")
+Rel(user_repository, user_db, "Queries", "SQLite")
+Rel(config_manager, content_store, "Reads config", "YAML parsing")
+
+note right of post_service : Handles post validation\nMarkdown processing\nDraft/publish logic
+note right of build_service : Atomic builds\nBackup management\nProgress tracking
+@enduml

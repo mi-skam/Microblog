@@ -6,16 +6,21 @@ the microblog application.
 """
 
 import os
+import sys
+import time
 from pathlib import Path
 
 import click
+from watchfiles import watch as watch_files
 
 from microblog.auth.models import User
+from microblog.builder.generator import BuildPhase, BuildProgress, build_site
 from microblog.database import (
     create_admin_user,
     get_database_path,
     setup_database_if_needed,
 )
+from microblog.server.config import get_config_manager
 from microblog.utils import get_build_dir, get_content_dir, get_project_root
 
 
@@ -44,26 +49,159 @@ def main(ctx: click.Context, verbose: bool) -> None:
 @click.option(
     "--force", "-f", is_flag=True, help="Force rebuild even if no changes detected"
 )
+@click.option(
+    "--watch", "-w", is_flag=True, help="Watch for changes and rebuild automatically"
+)
+@click.option(
+    "--config", "-c", type=click.Path(exists=True), help="Override configuration file path"
+)
 @click.pass_context
-def build(ctx: click.Context, output: str, force: bool) -> None:
+def build(ctx: click.Context, output: str, force: bool, watch: bool, config: str) -> None:
     """
     Build the static site from markdown content.
 
     Processes all markdown files in the content directory and generates
-    a complete static HTML site.
+    a complete static HTML site with template rendering and asset copying.
     """
     verbose = ctx.obj.get("verbose", False)
 
     if verbose:
         click.echo(f"Building site to {output} directory...")
         click.echo(f"Force rebuild: {force}")
+        click.echo(f"Watch mode: {watch}")
+        if config:
+            click.echo(f"Using configuration: {config}")
 
-    # TODO: Implement actual build logic in future iterations
-    click.echo("Build functionality will be implemented in the next iteration")
-    click.echo(f"Would build site to: {Path(output).resolve()}")
+    # Initialize configuration manager with custom config if provided
+    config_manager = get_config_manager()
+    if config:
+        config_manager.config_path = Path(config)
+        try:
+            config_manager.load_config()
+            if verbose:
+                click.echo(f"Loaded configuration from {config}")
+        except Exception as e:
+            click.echo(click.style(f"ERROR: Failed to load configuration from {config}: {e}", fg="red"))
+            sys.exit(1)
 
-    if force:
-        click.echo("Force rebuild flag acknowledged")
+    # Override output directory if provided
+    if output != "build":
+        try:
+            app_config = config_manager.config
+            app_config.build.output_dir = output
+            if verbose:
+                click.echo(f"Output directory overridden to: {output}")
+        except Exception as e:
+            click.echo(click.style(f"ERROR: Failed to override output directory: {e}", fg="red"))
+            sys.exit(1)
+
+    def progress_callback(progress: BuildProgress) -> None:
+        """Progress callback for verbose output and build status reporting."""
+        if verbose:
+            timestamp = progress.timestamp.strftime("%H:%M:%S") if progress.timestamp else ""
+            if progress.details:
+                detail_info = f" ({progress.details.get('processed', 0)}/{progress.details.get('total', 0)})" if 'processed' in progress.details else ""
+                click.echo(f"[{timestamp}] {progress.phase.value}: {progress.message}{detail_info} ({progress.percentage:.1f}%)")
+            else:
+                click.echo(f"[{timestamp}] {progress.phase.value}: {progress.message} ({progress.percentage:.1f}%)")
+        else:
+            # Show simplified progress for non-verbose mode
+            if progress.phase in [BuildPhase.COMPLETED, BuildPhase.FAILED]:
+                if progress.phase == BuildPhase.COMPLETED:
+                    click.echo(click.style(f"✓ {progress.message}", fg="green"))
+                else:
+                    click.echo(click.style(f"✗ {progress.message}", fg="red"))
+
+    def perform_build() -> bool:
+        """Perform a single build operation."""
+        try:
+            if verbose:
+                click.echo("Starting build process...")
+
+            result = build_site(progress_callback)
+
+            if result.success:
+                if not verbose:  # Only show summary if not verbose (verbose already showed detailed progress)
+                    click.echo(click.style(f"✓ Build completed successfully in {result.duration:.1f}s", fg="green"))
+
+                if verbose and result.stats:
+                    click.echo("\nBuild Statistics:")
+                    if 'content' in result.stats:
+                        content_stats = result.stats['content']
+                        click.echo(f"  Posts processed: {content_stats.get('processed_posts', 0)}")
+                    if 'rendering' in result.stats:
+                        rendering_stats = result.stats['rendering']
+                        click.echo(f"  Pages rendered: {rendering_stats.get('pages_rendered', 0)}")
+                    if 'assets' in result.stats:
+                        asset_stats = result.stats['assets']
+                        click.echo(f"  Assets copied: {asset_stats.get('total_successful', 0)}")
+
+                return True
+            else:
+                if result.error:
+                    click.echo(click.style(f"✗ Build failed: {result.error}", fg="red"))
+                else:
+                    click.echo(click.style(f"✗ {result.message}", fg="red"))
+                return False
+
+        except Exception as e:
+            click.echo(click.style(f"✗ Build failed with exception: {e}", fg="red"))
+            if verbose:
+                import traceback
+                click.echo(traceback.format_exc())
+            return False
+
+    # Perform initial build
+    if not perform_build():
+        sys.exit(1)
+
+    # Watch mode implementation
+    if watch:
+        if verbose:
+            click.echo("\n" + "="*50)
+            click.echo("Watch mode enabled - watching for changes...")
+            click.echo("Press Ctrl+C to stop watching")
+            click.echo("="*50)
+        else:
+            click.echo("Watch mode enabled. Press Ctrl+C to stop.")
+
+        content_dir = get_content_dir()
+        if not content_dir.exists():
+            click.echo(click.style(f"ERROR: Content directory does not exist: {content_dir}", fg="red"))
+            sys.exit(1)
+
+        try:
+            for changes in watch_files(content_dir):
+                if verbose:
+                    click.echo(f"\nDetected changes: {len(changes)} file(s)")
+                    for change_type, file_path in changes:
+                        click.echo(f"  {change_type}: {file_path}")
+                else:
+                    click.echo("\nDetected changes, rebuilding...")
+
+                # Small delay to ensure file operations are complete
+                time.sleep(0.1)
+
+                # Rebuild after changes
+                if verbose:
+                    click.echo("\nRebuilding due to changes...")
+
+                success = perform_build()
+
+                if verbose:
+                    if success:
+                        click.echo("Rebuild completed. Watching for more changes...")
+                    else:
+                        click.echo("Rebuild failed. Watching for more changes...")
+
+        except KeyboardInterrupt:
+            if verbose:
+                click.echo("\nWatch mode stopped by user")
+            else:
+                click.echo("\nStopped watching")
+        except Exception as e:
+            click.echo(click.style(f"ERROR: Watch mode failed: {e}", fg="red"))
+            sys.exit(1)
 
 
 @main.command()

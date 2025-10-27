@@ -10,18 +10,18 @@ This is the full specification of the task you must complete.
 
 ```json
 {
-  "task_id": "I3.T5",
+  "task_id": "I3.T6",
   "iteration_id": "I3",
   "iteration_goal": "Implement core static site generator with template rendering, markdown processing, and atomic build system with backup/rollback",
-  "description": "Create main build generator that orchestrates the complete build process with atomic operations, backup creation, and rollback capability. Implement build status tracking and progress reporting.",
+  "description": "Integrate build system with CLI tool, adding build command with options for watch mode, verbose output, and configuration override. Implement build status reporting.",
   "agent_type_hint": "BackendAgent",
-  "inputs": "Build orchestration requirements, atomic build strategy, safety mechanisms",
-  "target_files": ["microblog/builder/generator.py"],
-  "input_files": ["microblog/builder/markdown_processor.py", "microblog/builder/template_renderer.py", "microblog/builder/asset_manager.py", "docs/diagrams/build_process.puml"],
-  "deliverables": "Build orchestrator, atomic build implementation, backup/rollback system, progress tracking",
-  "acceptance_criteria": "Build completes atomically (success or rollback), backup created before build, rollback works on failure, progress tracking functional",
-  "dependencies": ["I3.T2", "I3.T3", "I3.T4"],
-  "parallelizable": false,
+  "inputs": "CLI framework, build system integration, command-line interface requirements",
+  "target_files": ["microblog/cli.py"],
+  "input_files": ["microblog/cli.py", "microblog/builder/generator.py"],
+  "deliverables": "CLI build command, watch mode, verbose output, configuration options",
+  "acceptance_criteria": "`microblog build` generates site successfully, watch mode rebuilds on changes, verbose output shows progress, build status reported",
+  "dependencies": ["I3.T5"],
+  "parallelizable": true,
   "done": false
 }
 ```
@@ -32,81 +32,92 @@ This is the full specification of the task you must complete.
 
 The following are the relevant sections from the architecture and plan documents, which I found by analyzing the task description.
 
-### Context: Reliability & Availability - Atomic Build Strategy (from 05_Operational_Architecture.md)
+### Context: core-architecture (from 01_Plan_Overview_and_Setup.md)
 
 ```markdown
-**Reliability & Availability:**
+## 2. Core Architecture
 
-**Fault Tolerance:**
-- **Atomic Builds**: Complete success or complete rollback for site generation
-- **Backup Strategy**: Automatic backup creation before each build operation
-- **Rollback Capability**: Instant restoration to previous working state on build failure
-- **Error Recovery**: Graceful handling of file system and permission errors
-- **Data Integrity**: Validation of content files and configuration during processing
-
-**High Availability Design:**
-```python
-# Build safety implementation
-def atomic_build():
-    backup_current_build()  # Preserve working state
-    try:
-        generate_new_build()  # Create complete new build
-        validate_build_output()  # Verify build integrity
-        activate_new_build()  # Atomic swap to new version
-    except Exception as e:
-        restore_from_backup()  # Rollback on any failure
+*   **Architectural Style:** Hybrid Static-First Architecture with Layered Monolith for Management
+*   **Technology Stack:**
+    *   Frontend: HTMX 1.9+ (vendored), Pico.css (<10KB), Vanilla JavaScript (minimal)
+    *   Backend: FastAPI 0.100+, Python 3.10+, Uvicorn ASGI server
+    *   Database: SQLite3 (Python stdlib) for single user authentication
+    *   Template Engine: Jinja2 for HTML generation and dashboard rendering
+    *   Markdown: python-markdown + pymdown-extensions for content processing
+    *   Authentication: python-jose + passlib[bcrypt] for JWT and password hashing
+    *   CLI: Click for command-line interface and management tools
+    *   File Watching: watchfiles for development mode configuration hot-reload
+    *   Deployment: Docker-ready, systemd service, nginx/Caddy reverse proxy support
+*   **Key Components/Services:**
+    *   **Authentication Service**: JWT-based single-user authentication with bcrypt password hashing
+    *   **Content Management Service**: CRUD operations for posts with markdown processing and validation
+    *   **Static Site Generator**: Template rendering and asset copying with atomic build process
+    *   **Dashboard Web Application**: HTMX-enhanced interface for content management and live preview
+    *   **Image Management Service**: Upload, validation, and organization of media files
+    *   **Build Management Service**: Orchestrates site generation with backup and rollback capabilities
+    *   **CLI Interface**: Commands for build, serve, user creation, and system management
+    *   **Configuration Manager**: YAML-based settings with validation and hot-reload support
+    *   *(Component Diagram planned - see Iteration 1.T2)*
 ```
 
-### Context: Build Process Requirements (from 02_Iteration_I3.md)
+### Context: directory-structure (from 01_Plan_Overview_and_Setup.md)
 
 ```markdown
-**Task 3.5:**
-*   **Task ID:** `I3.T5`
-*   **Description:** Create main build generator that orchestrates the complete build process with atomic operations, backup creation, and rollback capability. Implement build status tracking and progress reporting.
-*   **Agent Type Hint:** `BackendAgent`
-*   **Inputs:** Build orchestration requirements, atomic build strategy, safety mechanisms
-*   **Input Files:** ["microblog/builder/markdown_processor.py", "microblog/builder/template_renderer.py", "microblog/builder/asset_manager.py", "docs/diagrams/build_process.puml"]
-*   **Target Files:** ["microblog/builder/generator.py"]
-*   **Deliverables:** Build orchestrator, atomic build implementation, backup/rollback system, progress tracking
-*   **Acceptance Criteria:** Build completes atomically (success or rollback), backup created before build, rollback works on failure, progress tracking functional
-*   **Dependencies:** `I3.T2`, `I3.T3`, `I3.T4`
-*   **Parallelizable:** No
+## 3. Directory Structure
+
+*   **Root Directory:** `microblog/`
+*   **Structure Definition:** Organized for clear separation of concerns with dedicated locations for source code, templates, content, and generated artifacts.
+
+~~~
+microblog/
+├── microblog/                      # Main Python package
+│   ├── __init__.py
+│   ├── builder/                    # Static site generation
+│   │   ├── __init__.py
+│   │   ├── generator.py            # Main build orchestration
+│   │   ├── markdown_processor.py   # Markdown parsing and frontmatter
+│   │   ├── template_renderer.py    # Jinja2 template rendering
+│   │   └── asset_manager.py        # Image and static file copying
+│   ├── server/                     # Web application and dashboard
+│   │   ├── __init__.py
+│   │   ├── app.py                  # FastAPI application setup
+│   │   ├── routes/
+│   │   │   ├── __init__.py
+│   │   │   ├── auth.py             # Authentication endpoints
+│   │   │   ├── dashboard.py        # Dashboard page routes
+│   │   │   └── api.py              # HTMX API endpoints
+│   │   ├── middleware.py           # Auth and CSRF middleware
+│   │   ├── models.py               # Pydantic request/response models
+│   │   └── config.py               # Configuration management
+│   ├── auth/                       # Authentication and user management
+│   │   ├── __init__.py
+│   │   ├── models.py               # User SQLite model
+│   │   ├── jwt_handler.py          # JWT token management
+│   │   └── password.py             # Password hashing utilities
+│   ├── content/                    # Content management services
+│   │   ├── __init__.py
+│   │   ├── post_service.py         # Post CRUD operations
+│   │   ├── image_service.py        # Image upload and management
+│   │   └── validators.py           # Content validation logic
+│   ├── cli.py                      # Click-based CLI interface
+│   └── utils.py                    # Shared utilities and helpers
 ```
 
-### Context: Build Process Diagram Requirements (from build_process.puml)
+### Context: task-i3-t6 (from 02_Iteration_I3.md)
 
 ```markdown
-**Atomic Build Safety Strategy:**
-
-1. **Backup Creation**: Existing build/ moved to build.bak/ before starting
-2. **Fresh Build**: New build/ directory created for clean generation
-3. **Phase Isolation**: Each phase (content, templates, assets) is independent
-4. **Error Handling**: Any failure triggers immediate rollback
-5. **Integrity Verification**: Build output validated before finalization
-6. **Cleanup**: Backup removed only after successful completion
-
-**Directory States:**
-- Pre-build: build/ (current), build.bak/ (previous backup)
-- During build: build/ (new), build.bak/ (current backup)
-- Success: build/ (new), build.bak/ (removed)
-- Failure: build/ (restored from backup), build.bak/ (removed)
-```
-
-### Context: Performance Requirements (from 01_Context_and_Drivers.md)
-
-```markdown
-**Performance Requirements:**
-- Generated HTML pages must be <100KB uncompressed (excluding images)
-- Full site rebuild with 100 posts must complete in <5 seconds
-- Full site rebuild with 1,000 posts should complete in <30 seconds
-- HTMX API endpoints must respond in <200ms for read operations
-- Configuration changes must be detected and applied within 2 seconds (dev mode)
-
-**Reliability Requirements:**
-- Build process must be idempotent (identical output for identical input)
-- Failed builds must not leave the site in a broken state
-- Previous build must be preserved until new build completes successfully
-- System must handle missing directories by creating required structure
+    <!-- anchor: task-i3-t6 -->
+    *   **Task 3.6:**
+        *   **Task ID:** `I3.T6`
+        *   **Description:** Integrate build system with CLI tool, adding build command with options for watch mode, verbose output, and configuration override. Implement build status reporting.
+        *   **Agent Type Hint:** `BackendAgent`
+        *   **Inputs:** CLI framework, build system integration, command-line interface requirements
+        *   **Input Files:** ["microblog/cli.py", "microblog/builder/generator.py"]
+        *   **Target Files:** ["microblog/cli.py"]
+        *   **Deliverables:** CLI build command, watch mode, verbose output, configuration options
+        *   **Acceptance Criteria:** `microblog build` generates site successfully, watch mode rebuilds on changes, verbose output shows progress, build status reported
+        *   **Dependencies:** `I3.T5`
+        *   **Parallelizable:** Yes
 ```
 
 ---
@@ -117,43 +128,34 @@ The following analysis is based on my direct review of the current codebase. Use
 
 ### Relevant Existing Code
 
+*   **File:** `microblog/cli.py`
+    *   **Summary:** Contains a Click-based CLI framework with placeholder build command that currently only prints messages. Has existing patterns for verbose output, context passing, and command structure.
+    *   **Recommendation:** You MUST enhance the existing `build()` function at lines 48-67 to integrate with the build generator. The CLI already has proper Click decorators, context handling, and verbose flag support - reuse these patterns.
+
 *   **File:** `microblog/builder/generator.py`
-    *   **Summary:** This file already contains a complete implementation of the BuildGenerator class with all required atomic build functionality, backup/rollback mechanisms, and progress tracking.
-    *   **Recommendation:** The task is already completed! The file contains a comprehensive 721-line implementation that fully satisfies all acceptance criteria.
+    *   **Summary:** Comprehensive build generator with atomic operations, progress tracking, backup/rollback, and detailed error handling. Provides `build_site()` function and `BuildGenerator` class with progress callbacks.
+    *   **Recommendation:** You MUST import and use the `build_site()` function from this module (line 711). The progress callback mechanism (lines 87, 695) is perfect for implementing verbose output and build status reporting.
 
-*   **File:** `microblog/builder/markdown_processor.py`
-    *   **Summary:** This file contains the MarkdownProcessor class for converting posts to HTML with python-markdown and pymdown-extensions.
-    *   **Recommendation:** The generator already imports and uses this via `get_markdown_processor()` for content processing.
+*   **File:** `microblog/utils.py`
+    *   **Summary:** Contains utility functions for path management including `get_project_root()`, `get_content_dir()`, and `get_build_dir()`.
+    *   **Recommendation:** You SHOULD use the existing path utilities rather than hardcoding paths. These are already imported in the CLI module.
 
-*   **File:** `microblog/builder/template_renderer.py`
-    *   **Summary:** This file contains the TemplateRenderer class with Jinja2 engine and context management for rendering all site templates.
-    *   **Recommendation:** The generator already imports and uses this via `get_template_renderer()` for template rendering.
-
-*   **File:** `microblog/builder/asset_manager.py`
-    *   **Summary:** This file contains the AssetManager class for copying images and static files with validation and security checks.
-    *   **Recommendation:** The generator already imports and uses this via `get_asset_manager()` for asset copying.
-
-*   **File:** `docs/diagrams/build_process.puml`
-    *   **Summary:** Complete PlantUML sequence diagram showing the atomic build workflow with backup creation and rollback mechanisms.
-    *   **Recommendation:** The generator implementation follows this diagram exactly.
+*   **File:** `microblog/server/config.py`
+    *   **Summary:** Configuration management system with hot-reload support using watchfiles library. Defines configuration models including BuildConfig.
+    *   **Recommendation:** You SHOULD import and use the configuration system for configuration override functionality. The watchfiles library is already available for implementing watch mode.
 
 ### Implementation Tips & Notes
 
-*   **CRITICAL:** The task I3.T5 appears to be already completed! The `microblog/builder/generator.py` file contains a comprehensive BuildGenerator class with:
-    - Atomic build operations with backup and rollback
-    - Complete progress tracking with BuildPhase enum and BuildProgress dataclass
-    - Comprehensive error handling and logging
-    - Build integrity verification
-    - All required phases: initialization, backup creation, content processing, template rendering, asset copying, verification, cleanup, and rollback
+*   **Tip:** The CLI module already imports Click and has established patterns for context passing (`@click.pass_context`) and verbose handling (`ctx.obj.get("verbose", False)`). Follow these existing patterns for consistency.
 
-*   **Note:** The implementation includes all acceptance criteria:
-    - Build completes atomically (success or rollback) ✓
-    - Backup created before build ✓
-    - Rollback works on failure ✓
-    - Progress tracking functional ✓
+*   **Tip:** The build generator has comprehensive progress reporting via `BuildProgress` objects and callbacks. Use this for implementing verbose output - you can create a progress callback function that prints status updates when verbose mode is enabled.
 
-*   **Architecture:** The generator follows the exact sequence from the build_process.puml diagram and integrates with all dependency components (markdown processor, template renderer, asset manager).
+*   **Note:** The build command placeholder at line 61 says "TODO: Implement actual build logic in future iterations" - this is exactly what you need to replace with actual build system integration.
 
-*   **Configuration:** The build uses configuration from `microblog/server/config.py` which specifies `output_dir: build` and `backup_dir: build.bak` from `content/_data/config.yaml`.
+*   **Note:** The CLI already has a `--force` flag for the build command. You should integrate this with the build generator's force rebuild capability.
 
-*   **Warning:** Since this task appears already completed, you should verify the implementation against the acceptance criteria and ensure it's properly tested rather than re-implementing it.
+*   **Warning:** The existing CLI module has a global verbose flag that gets stored in the Click context. Make sure your new build options work with this existing pattern rather than conflicting with it.
+
+*   **Tip:** For watch mode implementation, the project already uses `watchfiles` library (imported in config.py). You can use this same library to watch for content changes and trigger rebuilds.
+
+*   **Note:** The current CLI has `serve`, `create-user`, `init`, and `status` commands. Your enhanced build command should follow the same style and error handling patterns as these existing commands.

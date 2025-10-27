@@ -9,7 +9,7 @@
 
 {% block content %}
 <div class="post-editor">
-    <form method="post" action="{% if is_edit %}/api/posts/{{ post.computed_slug }}{% else %}/api/posts{% endif %}"
+    <form method="post" action="{% if is_edit %}/dashboard/api/posts/{{ post.computed_slug }}{% else %}/dashboard/api/posts{% endif %}"
           class="post-form" id="post-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         {% if is_edit %}
@@ -32,7 +32,7 @@
             <label for="slug">Slug</label>
             <input type="text"
                    id="slug"
-                   name="slug"
+                   name="new_slug"
                    value="{% if is_edit %}{{ post.frontmatter.slug or '' }}{% endif %}"
                    placeholder="Auto-generated from title">
             <small>Leave blank to auto-generate from title</small>
@@ -63,7 +63,7 @@
             <label for="date">Date</label>
             <input type="date"
                    id="date"
-                   name="date"
+                   name="post_date"
                    value="{% if is_edit %}{{ post.frontmatter.date.isoformat() }}{% endif %}">
         </div>
 

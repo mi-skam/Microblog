@@ -6,15 +6,20 @@ the main dashboard view, post listing, and statistics display with HTMX support.
 """
 
 import logging
-from datetime import datetime, date
+from datetime import datetime
+from pathlib import Path
 
-from fastapi import APIRouter, Request, Form, HTTPException
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from microblog.content.post_service import get_post_service, PostNotFoundError, PostValidationError, PostFileError
+from microblog.content.post_service import (
+    PostFileError,
+    PostNotFoundError,
+    PostValidationError,
+    get_post_service,
+)
 from microblog.server.middleware import get_csrf_token, get_current_user
-from microblog.utils import get_content_dir
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +27,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 # Initialize templates
-from pathlib import Path
 project_root = Path(__file__).parent.parent.parent.parent
 templates = Jinja2Templates(directory=str(project_root / "templates"))
 
@@ -76,19 +80,7 @@ async def dashboard_home(request: Request):
 
     except Exception as e:
         logger.error(f"Error loading dashboard: {e}")
-        return templates.TemplateResponse(
-            "dashboard/home.html",
-            {
-                "request": request,
-                "user": user,
-                "csrf_token": csrf_token,
-                "error": "Failed to load dashboard data",
-                "stats": {"total_posts": 0, "published_posts": 0, "draft_posts": 0, "recent_posts": 0},
-                "recent_posts": [],
-                "title": "Dashboard - Microblog",
-                "current_year": datetime.now().year
-            }
-        )
+        raise HTTPException(status_code=500, detail="Failed to load dashboard data") from e
 
 
 @router.get("/posts", response_class=HTMLResponse)
@@ -140,21 +132,7 @@ async def posts_list(request: Request):
 
     except Exception as e:
         logger.error(f"Error loading posts list: {e}")
-        return templates.TemplateResponse(
-            "dashboard/posts_list.html",
-            {
-                "request": request,
-                "user": user,
-                "csrf_token": csrf_token,
-                "error": "Failed to load posts",
-                "all_posts": [],
-                "published_posts": [],
-                "draft_posts": [],
-                "stats": {"total_posts": 0, "published_posts": 0, "draft_posts": 0},
-                "title": "Posts - Dashboard",
-                "current_year": datetime.now().year
-            }
-        )
+        raise HTTPException(status_code=500, detail="Failed to load posts") from e
 
 
 @router.get("/posts/new", response_class=HTMLResponse)
@@ -221,21 +199,7 @@ async def edit_post(request: Request, slug: str):
 
     except Exception as e:
         logger.error(f"Error loading post for editing: {e}")
-        return templates.TemplateResponse(
-            "dashboard/posts_list.html",
-            {
-                "request": request,
-                "user": user,
-                "csrf_token": csrf_token,
-                "error": f"Post '{slug}' not found",
-                "all_posts": [],
-                "published_posts": [],
-                "draft_posts": [],
-                "stats": {"total_posts": 0, "published_posts": 0, "draft_posts": 0},
-                "title": "Posts - Dashboard",
-                "current_year": datetime.now().year
-            }
-        )
+        raise HTTPException(status_code=404, detail=f"Post '{slug}' not found") from e
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -298,7 +262,7 @@ async def create_post_api(
     slug: str = Form(""),
     description: str = Form(""),
     tags: str = Form(""),
-    date: str = Form(""),
+    post_date: str = Form(""),
     draft: str = Form("false")
 ):
     """
@@ -315,7 +279,7 @@ async def create_post_api(
         post_service = get_post_service()
 
         # Parse form data
-        post_date = datetime.now().date() if not date else datetime.fromisoformat(date).date()
+        parsed_date = datetime.now().date() if not post_date else datetime.fromisoformat(post_date).date()
         post_tags = [tag.strip() for tag in tags.split(",") if tag.strip()] if tags else []
         is_draft = draft.lower() in ("true", "1", "yes", "on")
         post_slug = slug.strip() if slug.strip() else None
@@ -325,7 +289,7 @@ async def create_post_api(
         created_post = post_service.create_post(
             title=title,
             content=content,
-            date=post_date,
+            date=parsed_date,
             slug=post_slug,
             tags=post_tags,
             draft=is_draft,
@@ -339,13 +303,13 @@ async def create_post_api(
 
     except PostValidationError as e:
         logger.error(f"Post validation error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except PostFileError as e:
         logger.error(f"Post file error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Unexpected error creating post: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/api/posts/{slug}")
@@ -357,7 +321,7 @@ async def update_post_api(
     new_slug: str = Form(""),
     description: str = Form(""),
     tags: str = Form(""),
-    date: str = Form(""),
+    post_date: str = Form(""),
     draft: str = Form("false")
 ):
     """
@@ -377,7 +341,7 @@ async def update_post_api(
         post_service = get_post_service()
 
         # Parse form data
-        post_date = datetime.fromisoformat(date).date() if date else None
+        parsed_date = datetime.fromisoformat(post_date).date() if post_date else None
         post_tags = [tag.strip() for tag in tags.split(",") if tag.strip()] if tags else []
         is_draft = draft.lower() in ("true", "1", "yes", "on")
         updated_slug = new_slug.strip() if new_slug.strip() else None
@@ -388,7 +352,7 @@ async def update_post_api(
             slug=slug,
             title=title,
             content=content,
-            date=post_date,
+            date=parsed_date,
             new_slug=updated_slug,
             tags=post_tags,
             draft=is_draft,
@@ -402,13 +366,13 @@ async def update_post_api(
 
     except PostNotFoundError as e:
         logger.error(f"Post not found: {e}")
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except PostValidationError as e:
         logger.error(f"Post validation error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except PostFileError as e:
         logger.error(f"Post file error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Unexpected error updating post: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error") from e

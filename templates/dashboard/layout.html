@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Dashboard - Microblog{% endblock %}</title>
+    <meta name="description" content="{% block description %}Microblog Dashboard - Content Management{% endblock %}">
+    <meta name="robots" content="noindex, nofollow">
+
+    {% block extra_meta %}{% endblock %}
+
+    <!-- Pico.css Framework -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+
+    <!-- Dashboard Custom Styles -->
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+
+    <!-- HTMX for dynamic interactions -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    <!-- CSRF Token for HTMX requests -->
+    <meta name="csrf-token" content="{{ csrf_token }}">
+
+    {% block extra_styles %}{% endblock %}
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Navigation Header -->
+        <header class="dashboard-header">
+            <nav class="container-fluid">
+                <ul>
+                    <li>
+                        <a href="/dashboard" class="brand">
+                            <strong>Microblog</strong>
+                        </a>
+                    </li>
+                </ul>
+                <ul>
+                    <li>
+                        <a href="/dashboard" {% if request.url.path == '/dashboard' %}aria-current="page"{% endif %}>
+                            Dashboard
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/dashboard/posts" {% if request.url.path.startswith('/dashboard/posts') %}aria-current="page"{% endif %}>
+                            Posts
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/dashboard/pages" {% if request.url.path.startswith('/dashboard/pages') %}aria-current="page"{% endif %}>
+                            Pages
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/dashboard/settings" {% if request.url.path.startswith('/dashboard/settings') %}aria-current="page"{% endif %}>
+                            Settings
+                        </a>
+                    </li>
+                    <li class="user-menu">
+                        <details class="dropdown">
+                            <summary role="button" class="secondary">
+                                {% if request.state.user %}
+                                    {{ request.state.user.username }}
+                                {% else %}
+                                    User
+                                {% endif %}
+                            </summary>
+                            <ul>
+                                <li><a href="/dashboard/profile">Profile</a></li>
+                                <li><a href="/" target="_blank">View Site</a></li>
+                                <li>
+                                    <form method="post" action="/auth/logout" style="margin: 0;">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <button type="submit" class="outline secondary" style="width: 100%; margin: 0;">
+                                            Logout
+                                        </button>
+                                    </form>
+                                </li>
+                            </ul>
+                        </details>
+                    </li>
+                </ul>
+            </nav>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="dashboard-main">
+            <div class="container-fluid">
+                <!-- Breadcrumb Navigation -->
+                {% block breadcrumb %}
+                <nav aria-label="breadcrumb" class="breadcrumb">
+                    <ul>
+                        <li><a href="/dashboard">Dashboard</a></li>
+                        {% block breadcrumb_items %}{% endblock %}
+                    </ul>
+                </nav>
+                {% endblock %}
+
+                <!-- Flash Messages -->
+                {% if messages %}
+                <div class="messages">
+                    {% for category, message in messages %}
+                    <div class="message message-{{ category }}" role="alert">
+                        {{ message }}
+                        <button type="button" class="close" aria-label="Close">×</button>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Page Header -->
+                {% block page_header %}
+                <div class="page-header">
+                    <h1>{% block page_title %}Dashboard{% endblock %}</h1>
+                    {% block page_actions %}{% endblock %}
+                </div>
+                {% endblock %}
+
+                <!-- Page Content -->
+                <div class="page-content">
+                    {% block content %}{% endblock %}
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="dashboard-footer">
+            <div class="container-fluid">
+                <div class="footer-content">
+                    <small>
+                        {% block footer %}
+                        Microblog Dashboard &copy; {{ current_year or "2024" }}
+                        {% endblock %}
+                    </small>
+                    <div class="footer-links">
+                        <small>
+                            <a href="/" target="_blank">View Site</a>
+                            |
+                            <a href="/dashboard/help">Help</a>
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- HTMX Configuration -->
+    <script>
+        // Configure HTMX to include CSRF token in requests
+        document.body.addEventListener('htmx:configRequest', function(evt) {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]');
+            if (csrfToken) {
+                evt.detail.headers['X-CSRF-Token'] = csrfToken.getAttribute('content');
+            }
+        });
+
+        // Handle flash message close buttons
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('close')) {
+                e.target.parentElement.style.display = 'none';
+            }
+        });
+
+        // Handle responsive navigation
+        function toggleMobileNav() {
+            const nav = document.querySelector('.dashboard-header nav');
+            nav.classList.toggle('mobile-open');
+        }
+    </script>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

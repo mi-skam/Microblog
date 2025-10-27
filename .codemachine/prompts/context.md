@@ -10,17 +10,17 @@ This is the full specification of the task you must complete.
 
 ```json
 {
-  "task_id": "I4.T2",
+  "task_id": "I4.T3",
   "iteration_id": "I4",
   "iteration_goal": "Implement FastAPI web application with HTMX-enhanced dashboard for content management, authentication UI, and basic CRUD operations",
-  "description": "Implement FastAPI application setup with middleware configuration, route registration, and CORS/security headers. Create application factory pattern for testing and deployment.",
-  "agent_type_hint": "BackendAgent",
-  "inputs": "FastAPI best practices, middleware requirements, security headers specification",
-  "target_files": ["microblog/server/app.py"],
-  "input_files": ["microblog/server/middleware.py", "microblog/server/config.py"],
-  "deliverables": "FastAPI application setup, middleware integration, security configuration, application factory",
-  "acceptance_criteria": "Application starts successfully, middleware functions correctly, security headers set, CORS configured properly",
-  "dependencies": ["I2.T5"],
+  "description": "Create dashboard layout template with Pico.css styling, navigation menu, authentication status, and responsive design. Implement base template structure for all dashboard pages.",
+  "agent_type_hint": "FrontendAgent",
+  "inputs": "Dashboard design requirements, Pico.css framework, responsive design principles",
+  "target_files": ["templates/dashboard/layout.html", "static/css/dashboard.css"],
+  "input_files": ["static/css/dashboard.css"],
+  "deliverables": "Dashboard base template, CSS styling, responsive layout, navigation structure",
+  "acceptance_criteria": "Template renders correctly, responsive design works on mobile, navigation functional, styling consistent with Pico.css",
+  "dependencies": ["I1.T1"],
   "parallelizable": true,
   "done": false
 }
@@ -32,135 +32,54 @@ This is the full specification of the task you must complete.
 
 The following are the relevant sections from the architecture and plan documents, which I found by analyzing the task description.
 
-### Context: core-architecture (from 01_Plan_Overview_and_Setup.md)
+### Context: Architectural Style (from 02_Architecture_Overview.md)
 
 ```markdown
-## 2. Core Architecture
+**Primary Style: Hybrid Static-First Architecture with Separation of Concerns**
 
-*   **Architectural Style:** Hybrid Static-First Architecture with Layered Monolith for Management
-*   **Technology Stack:**
-    *   Frontend: HTMX 1.9+ (vendored), Pico.css (<10KB), Vanilla JavaScript (minimal)
-    *   Backend: FastAPI 0.100+, Python 3.10+, Uvicorn ASGI server
-    *   Database: SQLite3 (Python stdlib) for single user authentication
-    *   Template Engine: Jinja2 for HTML generation and dashboard rendering
-    *   Markdown: python-markdown + pymdown-extensions for content processing
-    *   Authentication: python-jose + passlib[bcrypt] for JWT and password hashing
-    *   CLI: Click for command-line interface and management tools
-    *   File Watching: watchfiles for development mode configuration hot-reload
-    *   Deployment: Docker-ready, systemd service, nginx/Caddy reverse proxy support
-*   **Key Components/Services:**
-    *   **Authentication Service**: JWT-based single-user authentication with bcrypt password hashing
-    *   **Content Management Service**: CRUD operations for posts with markdown processing and validation
-    *   **Static Site Generator**: Template rendering and asset copying with atomic build process
-    *   **Dashboard Web Application**: HTMX-enhanced interface for content management and live preview
-    *   **Image Management Service**: Upload, validation, and organization of media files
-    *   **Build Management Service**: Orchestrates site generation with backup and rollback capabilities
-    *   **CLI Interface**: Commands for build, serve, user creation, and system management
-    *   **Configuration Manager**: YAML-based settings with validation and hot-reload support
-    *   *(Component Diagram planned - see Iteration 1.T2)*
-*   **Data Model Overview:**
-    *   **User**: Single admin user with credentials stored in SQLite (bcrypt hashed passwords)
-    *   **Post**: Markdown files with YAML frontmatter containing title, date, slug, tags, draft status
-    *   **Image**: Files stored in content/images/ with validation and build-time copying
-    *   **Configuration**: YAML file with site settings, build options, server configuration, auth settings
-    *   **Session**: Stateless JWT tokens in httpOnly cookies with configurable expiration
-    *   *(Database ERD planned - see Iteration 1.T3)*
-*   **API Contract Style:** RESTful HTTP API with HTMX enhancement for dynamic interactions, HTML-first responses for progressive enhancement
-    *   *(Initial OpenAPI specification planned - see Iteration 2.T1)*
-*   **Communication Patterns:**
-    *   Synchronous HTTP request/response for page loads and API calls
-    *   HTMX partial updates for dynamic content without full page refreshes
-    *   File system events for configuration hot-reload in development mode
-    *   Atomic file operations for build process with backup/rollback safety
-    *   *(Key sequence diagrams planned - see Iteration 2.T2)*
+The MicroBlog system employs a hybrid architectural approach that combines static site generation with a dynamic management interface. This design separates the public-facing blog (served as static files) from the administrative interface (dynamic web application), providing optimal performance for readers while maintaining ease of management for content creators.
+
+**Key Architectural Patterns:**
+
+1. **Static-First Generation**: The public blog is generated as static HTML files, ensuring maximum performance, security, and deployment flexibility. This eliminates runtime dependencies for content delivery and enables hosting on any static file server.
+
+2. **Layered Monolith for Management**: The dashboard and build system follow a layered architecture pattern with clear separation between presentation (HTMX-enhanced web interface), business logic (content management and site generation), and data access (filesystem and SQLite) layers.
+
+3. **Command-Query Separation**: Clear distinction between read operations (serving static content, dashboard views) and write operations (content modification, site rebuilds) with appropriate performance optimizations for each.
+
+4. **Progressive Enhancement**: The dashboard uses HTMX for enhanced interactivity while maintaining functionality without JavaScript, ensuring accessibility and reliability.
 ```
 
-### Context: technology-stack (from 02_Architecture_Overview.md)
+### Context: Technology Stack Summary (from 02_Architecture_Overview.md)
 
 ```markdown
-### 3.2. Technology Stack Summary
-
 | **Component** | **Technology** | **Version** | **Justification** |
 |---------------|----------------|-------------|-------------------|
-| **Backend Language** | Python | 3.10+ | Excellent ecosystem for text processing, web frameworks, and CLI tools. Mature libraries for markdown, templating, and authentication. |
-| **Web Framework** | FastAPI | 0.100+ | Modern async framework with automatic OpenAPI documentation, excellent type support, and built-in security features. Ideal for both API endpoints and traditional web pages. |
-| **Template Engine** | Jinja2 | Latest | Industry standard with excellent performance, template inheritance, and extensive filter ecosystem. Native FastAPI integration. |
-| **Markdown Processing** | python-markdown + pymdown-extensions | Latest | Comprehensive markdown parsing with syntax highlighting, tables, and extensible architecture for future enhancements. |
-| **Frontmatter Parsing** | python-frontmatter | Latest | Reliable YAML frontmatter extraction with excellent error handling and validation capabilities. |
-| **Authentication** | python-jose + passlib | Latest | Secure JWT implementation with bcrypt password hashing. Battle-tested libraries with comprehensive security features. |
-| **Database** | SQLite3 | Python stdlib | Lightweight, serverless database perfect for single-user scenarios. No external dependencies or configuration required. |
 | **Frontend Enhancement** | HTMX | 1.9+ (vendored) | Enables dynamic interactions without complex JavaScript frameworks. Maintains progressive enhancement principles. |
 | **Styling** | Pico.css | Latest | Minimal, semantic CSS framework (<10KB) providing clean styling without design lock-in. |
-| **CLI Framework** | Click | Latest | Robust command-line interface with excellent help generation, parameter validation, and nested command support. |
-| **File Watching** | watchfiles | Latest | High-performance file system monitoring for development mode configuration reloading. |
-| **Development Tools** | Ruff | Latest | Fast Python linter and formatter providing code quality enforcement and automatic formatting. |
-| **Process Management** | Uvicorn | Latest | ASGI server with excellent performance, automatic reloading, and production deployment capabilities. |
-
-**Key Technology Decisions:**
-
-**Python Ecosystem Choice:**
-- Extensive text processing libraries ideal for markdown and template rendering
-- Mature web framework options with strong security foundations
-- Excellent CLI development tools and filesystem management capabilities
-- Strong type system support for maintainable code
-
-**FastAPI Selection:**
-- Async support for handling concurrent dashboard operations
-- Automatic request/response validation with Pydantic models
-- Built-in security middleware for CSRF, CORS, and authentication
-- Excellent documentation generation and development experience
-
-**Static Generation Strategy:**
-- Jinja2 templates provide flexibility for custom themes and layouts
-- python-markdown offers extensive plugin ecosystem for future enhancements
-- Separation of content (markdown) from presentation (templates) enables design iteration
+| **Template Engine** | Jinja2 | Latest | Industry standard with excellent performance, template inheritance, and extensive filter ecosystem. Native FastAPI integration. |
 
 **HTMX for Interactivity:**
 - Maintains server-side rendering benefits while adding dynamic behavior
+- Eliminates need for complex JavaScript build processes
+- Provides excellent developer experience with minimal learning curve
+- Graceful degradation ensures functionality without JavaScript
 ```
 
-### Context: security-considerations (from 05_Operational_Architecture.md)
+### Context: Task I4.T3 Details (from 02_Iteration_I4.md)
 
 ```markdown
-**Security Headers Configuration:**
-```python
-SECURITY_HEADERS = {
-    "X-Frame-Options": "DENY",
-    "X-Content-Type-Options": "nosniff",
-    "X-XSS-Protection": "1; mode=block",
-    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-    "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline'"
-}
-```
-
-**Data Protection:**
-- **Secrets Management**: JWT secret stored in configuration with minimum 32-character requirement
-- **Database Security**: SQLite file permissions restricted to application user
-- **File System Security**: Content directory permissions preventing unauthorized access
-- **Backup Security**: Build backups stored with same security constraints as primary data
-
-**Vulnerability Mitigation:**
-- **Rate Limiting**: Authentication endpoint protection against brute force attacks
-- **CSRF Protection**: Synchronizer token pattern for all state-changing operations
-- **Session Security**: Automatic token expiration and secure cookie attributes
-- **Dependency Scanning**: Regular security updates for Python dependencies
-```
-
-### Context: task-i4-t2 (from 02_Iteration_I4.md)
-
-```markdown
-    <!-- anchor: task-i4-t2 -->
-    *   **Task 4.2:**
-        *   **Task ID:** `I4.T2`
-        *   **Description:** Implement FastAPI application setup with middleware configuration, route registration, and CORS/security headers. Create application factory pattern for testing and deployment.
-        *   **Agent Type Hint:** `BackendAgent`
-        *   **Inputs:** FastAPI best practices, middleware requirements, security headers specification
-        *   **Input Files:** ["microblog/server/middleware.py", "microblog/server/config.py"]
-        *   **Target Files:** ["microblog/server/app.py"]
-        *   **Deliverables:** FastAPI application setup, middleware integration, security configuration, application factory
-        *   **Acceptance Criteria:** Application starts successfully, middleware functions correctly, security headers set, CORS configured properly
-        *   **Dependencies:** `I2.T5`
-        *   **Parallelizable:** Yes
+**Task 4.3:**
+* **Task ID:** `I4.T3`
+* **Description:** Create dashboard layout template with Pico.css styling, navigation menu, authentication status, and responsive design. Implement base template structure for all dashboard pages.
+* **Agent Type Hint:** `FrontendAgent`
+* **Inputs:** Dashboard design requirements, Pico.css framework, responsive design principles
+* **Input Files:** ["static/css/dashboard.css"]
+* **Target Files:** ["templates/dashboard/layout.html", "static/css/dashboard.css"]
+* **Deliverables:** Dashboard base template, CSS styling, responsive layout, navigation structure
+* **Acceptance Criteria:** Template renders correctly, responsive design works on mobile, navigation functional, styling consistent with Pico.css
+* **Dependencies:** `I1.T1`
+* **Parallelizable:** Yes
 ```
 
 ---
@@ -170,24 +89,37 @@ SECURITY_HEADERS = {
 The following analysis is based on my direct review of the current codebase. Use these notes and tips to guide your implementation.
 
 ### Relevant Existing Code
-*   **File:** `microblog/server/middleware.py`
-    *   **Summary:** This file contains three complete middleware classes: `AuthenticationMiddleware` for JWT authentication, `CSRFProtectionMiddleware` for CSRF protection, and `SecurityHeadersMiddleware` for security headers. It also provides utility functions for current user access and CSRF validation.
-    *   **Recommendation:** You MUST import and use these middleware classes directly in your FastAPI app setup. The middleware is already fully implemented and includes all security features specified in the architecture.
-*   **File:** `microblog/server/config.py`
-    *   **Summary:** This file provides a complete configuration management system with `ConfigManager` class and `AppConfig` models including `SiteConfig`, `BuildConfig`, `ServerConfig`, and `AuthConfig`. It includes validation, hot-reload support, and global access functions.
-    *   **Recommendation:** You MUST use `get_config()` function to access configuration throughout your app. The configuration includes all necessary server settings including host, port, and hot_reload options.
-*   **File:** `microblog/server/routes/auth.py`
-    *   **Summary:** This file defines a complete authentication router with login/logout endpoints, both HTML and API versions, and session checking capabilities. It uses FastAPI's `APIRouter` pattern.
-    *   **Recommendation:** You MUST follow the same router pattern for organizing routes. Import this router and include it in your main app using `app.include_router(auth.router)`.
-*   **File:** `pyproject.toml`
-    *   **Summary:** This file shows all required dependencies are already specified, including FastAPI 0.100+, uvicorn, and all security/middleware dependencies.
-    *   **Recommendation:** All necessary packages are available. You can import FastAPI, CORS middleware, and other required components directly.
+
+* **File:** `templates/base.html`
+  * **Summary:** This file contains the existing public-facing template structure with embedded CSS styling for the static blog site. It provides a good reference for the overall structure and styling approach, but is NOT for the dashboard.
+  * **Recommendation:** You should NOT modify this file as it's for the public blog. Use it as inspiration for structure but create a completely separate dashboard template hierarchy.
+
+* **File:** `microblog/server/app.py`
+  * **Summary:** This file contains the FastAPI application factory with middleware configuration, static file mounting, and template directory setup. It shows how templates are configured.
+  * **Recommendation:** You MUST understand that templates are configured via `app.state.templates = Jinja2Templates(directory=str(template_dir))` where template_dir is `content_dir / "templates"`. Your dashboard templates will be served from this system.
+
+* **File:** `microblog/server/routes/auth.py`
+  * **Summary:** This file contains existing authentication routes that reference template paths like "auth/login.html" and use the templates system for rendering.
+  * **Recommendation:** You SHOULD follow the same pattern for template organization. Notice how templates are used: `templates.TemplateResponse("auth/login.html", {...})` with context variables.
+
+* **File:** `microblog/server/middleware.py`
+  * **Summary:** This file contains authentication middleware that protects dashboard routes and provides user context via `request.state.user` and CSRF token management.
+  * **Recommendation:** You MUST design your template to work with the authentication system. The current user is available via `get_current_user(request)` and CSRF tokens via `get_csrf_token(request)`.
 
 ### Implementation Tips & Notes
-*   **Tip:** The middleware classes are already fully implemented with proper error handling and security features. You should instantiate them in the order: `SecurityHeadersMiddleware`, `CSRFProtectionMiddleware`, `AuthenticationMiddleware` for proper layering.
-*   **Note:** The `ConfigManager` supports both development and production modes via the `dev_mode` parameter. You SHOULD use this to enable hot-reload only in development.
-*   **Warning:** The middleware expects specific protected paths like `/dashboard`, `/api/`, `/admin/`. Ensure your route structure aligns with these protection patterns.
-*   **Tip:** The existing auth router shows how to integrate templates properly. You'll need to set up Jinja2Templates for any additional routes that serve HTML.
-*   **Note:** The configuration system is designed to be used globally through `get_config()`. You SHOULD use this function rather than creating new ConfigManager instances.
-*   **Important:** The `SecurityHeadersMiddleware` already implements all required security headers from the architecture specification. You do NOT need to add additional security header configuration.
-*   **Pattern:** Use the application factory pattern by creating a function like `create_app()` that returns a configured FastAPI instance. This supports both development and production deployment scenarios.
+
+* **Tip:** The project directory structure shows that `templates/dashboard/` directory exists but is empty. You need to create the layout template there.
+
+* **Tip:** The `static/css/` directory exists but is empty. You need to create the dashboard.css file there. Notice that static files are served from the content directory's static folder, not the project root static folder.
+
+* **Note:** The existing base.html template uses inline CSS. For the dashboard, you should use Pico.css as specified, which means you'll need to either vendor it or include it via CDN, then add your custom dashboard.css for additional styling.
+
+* **Warning:** The authentication system expects templates in specific locations. The auth routes look for templates like "auth/login.html" relative to the templates directory. Your dashboard layout should be at "dashboard/layout.html".
+
+* **Tip:** Based on the middleware code, authenticated users will have access to request.state.user containing user information. Your template should display authentication status and provide logout functionality.
+
+* **Note:** The application is configured to redirect the root path ("/") to "/dashboard", so your dashboard layout will be the main interface users see after authentication.
+
+* **Tip:** The project uses HTMX for interactivity as specified in the architecture. Your layout template should be prepared to include HTMX and support progressive enhancement patterns.
+
+* **Critical:** The task specifies Pico.css styling, which is a semantic CSS framework. This means you should use semantic HTML elements and let Pico.css provide the base styling, then add custom CSS in dashboard.css for dashboard-specific enhancements.

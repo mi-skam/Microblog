@@ -1,0 +1,506 @@
+/* Dashboard Custom Styles for Microblog */
+/* Built on top of Pico.css framework for semantic styling */
+
+:root {
+  /* Dashboard-specific color variables */
+  --dashboard-primary: var(--pico-primary);
+  --dashboard-secondary: var(--pico-secondary);
+  --dashboard-background: var(--pico-background-color);
+  --dashboard-card-background: var(--pico-card-background-color);
+  --dashboard-border: var(--pico-border-color);
+  --dashboard-text: var(--pico-color);
+  --dashboard-text-muted: var(--pico-muted-color);
+
+  /* Dashboard layout variables */
+  --dashboard-header-height: 4rem;
+  --dashboard-footer-height: 3rem;
+  --dashboard-sidebar-width: 16rem;
+  --dashboard-content-max-width: 80rem;
+}
+
+/* Dashboard Container Layout */
+.dashboard-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Dashboard Header */
+.dashboard-header {
+  background: var(--dashboard-card-background);
+  border-bottom: 1px solid var(--dashboard-border);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  height: var(--dashboard-header-height);
+}
+
+.dashboard-header nav {
+  padding: 0.5rem 1rem;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dashboard-header .brand {
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--dashboard-primary);
+}
+
+.dashboard-header .brand:hover {
+  text-decoration: none;
+  opacity: 0.8;
+}
+
+/* Navigation Styling */
+.dashboard-header nav ul {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dashboard-header nav li {
+  margin: 0;
+}
+
+.dashboard-header nav a {
+  padding: 0.5rem 1rem;
+  text-decoration: none;
+  color: var(--dashboard-text);
+  border-radius: var(--pico-border-radius);
+  transition: background-color 0.2s ease;
+}
+
+.dashboard-header nav a:hover {
+  background: var(--pico-secondary-hover);
+  color: var(--dashboard-text);
+  text-decoration: none;
+}
+
+.dashboard-header nav a[aria-current="page"] {
+  background: var(--dashboard-primary);
+  color: var(--pico-primary-inverse);
+}
+
+/* User Menu Dropdown */
+.user-menu .dropdown summary {
+  margin: 0;
+  padding: 0.5rem 1rem;
+}
+
+.user-menu .dropdown ul {
+  background: var(--dashboard-card-background);
+  border: 1px solid var(--dashboard-border);
+  border-radius: var(--pico-border-radius);
+  box-shadow: var(--pico-box-shadow);
+  margin-top: 0.5rem;
+  min-width: 12rem;
+}
+
+.user-menu .dropdown li {
+  margin: 0;
+  padding: 0;
+}
+
+.user-menu .dropdown a,
+.user-menu .dropdown button {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  text-align: left;
+  border: none;
+  background: none;
+  color: var(--dashboard-text);
+  text-decoration: none;
+  border-radius: 0;
+}
+
+.user-menu .dropdown a:hover,
+.user-menu .dropdown button:hover {
+  background: var(--pico-secondary-hover);
+  text-decoration: none;
+}
+
+/* Main Content Area */
+.dashboard-main {
+  flex: 1;
+  padding: 2rem 0;
+  background: var(--dashboard-background);
+}
+
+/* Breadcrumb Navigation */
+.breadcrumb {
+  margin-bottom: 2rem;
+}
+
+.breadcrumb ul {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875rem;
+  color: var(--dashboard-text-muted);
+}
+
+.breadcrumb li:not(:last-child)::after {
+  content: "/";
+  margin-left: 0.5rem;
+  color: var(--dashboard-text-muted);
+}
+
+.breadcrumb a {
+  color: var(--dashboard-text-muted);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  color: var(--dashboard-primary);
+  text-decoration: underline;
+}
+
+/* Flash Messages */
+.messages {
+  margin-bottom: 2rem;
+}
+
+.message {
+  position: relative;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: var(--pico-border-radius);
+  border: 1px solid transparent;
+}
+
+.message-success {
+  background: var(--pico-ins-color);
+  border-color: var(--pico-primary);
+  color: var(--pico-primary);
+}
+
+.message-error {
+  background: var(--pico-del-color);
+  border-color: var(--pico-secondary);
+  color: var(--pico-secondary);
+}
+
+.message-warning {
+  background: var(--pico-mark-background-color);
+  border-color: var(--pico-mark-color);
+  color: var(--pico-mark-color);
+}
+
+.message-info {
+  background: var(--pico-code-background-color);
+  border-color: var(--dashboard-border);
+  color: var(--dashboard-text);
+}
+
+.message .close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.75rem;
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.7;
+  padding: 0;
+  line-height: 1;
+}
+
+.message .close:hover {
+  opacity: 1;
+}
+
+/* Page Header */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--dashboard-border);
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+/* Page Content */
+.page-content {
+  background: var(--dashboard-card-background);
+  border-radius: var(--pico-border-radius);
+  padding: 2rem;
+  box-shadow: var(--pico-box-shadow);
+}
+
+/* Dashboard Footer */
+.dashboard-footer {
+  background: var(--dashboard-card-background);
+  border-top: 1px solid var(--dashboard-border);
+  padding: 1rem 0;
+  margin-top: auto;
+}
+
+.footer-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-links a {
+  color: var(--dashboard-text-muted);
+  text-decoration: none;
+  margin: 0 0.25rem;
+}
+
+.footer-links a:hover {
+  color: var(--dashboard-primary);
+  text-decoration: underline;
+}
+
+/* Dashboard Cards */
+.dashboard-card {
+  background: var(--dashboard-card-background);
+  border: 1px solid var(--dashboard-border);
+  border-radius: var(--pico-border-radius);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--pico-box-shadow);
+}
+
+.dashboard-card h2,
+.dashboard-card h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+/* Dashboard Grid */
+.dashboard-grid {
+  display: grid;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.dashboard-grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+}
+
+.dashboard-grid-3 {
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+
+.dashboard-grid-4 {
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
+/* Action Buttons */
+.btn-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* Data Tables */
+.data-table {
+  width: 100%;
+  margin-bottom: 1.5rem;
+}
+
+.data-table th {
+  background: var(--dashboard-background);
+  font-weight: 600;
+  text-align: left;
+  padding: 0.75rem;
+}
+
+.data-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--dashboard-border);
+}
+
+.data-table tr:hover {
+  background: var(--pico-secondary-hover);
+}
+
+/* Status Indicators */
+.status {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-published {
+  background: var(--pico-ins-color);
+  color: var(--pico-primary);
+}
+
+.status-draft {
+  background: var(--pico-mark-background-color);
+  color: var(--pico-mark-color);
+}
+
+.status-archived {
+  background: var(--pico-code-background-color);
+  color: var(--dashboard-text-muted);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .dashboard-header nav {
+    flex-direction: column;
+    height: auto;
+    padding: 1rem;
+  }
+
+  .dashboard-header nav ul:first-child {
+    width: 100%;
+    justify-content: center;
+    margin-bottom: 1rem;
+  }
+
+  .dashboard-header nav ul:last-child {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .footer-content {
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: center;
+  }
+
+  .dashboard-grid-2,
+  .dashboard-grid-3,
+  .dashboard-grid-4 {
+    grid-template-columns: 1fr;
+  }
+
+  .btn-group {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .data-table {
+    font-size: 0.875rem;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-main {
+    padding: 1rem 0;
+  }
+
+  .page-content {
+    padding: 1rem;
+    margin: 0 -1rem;
+    border-radius: 0;
+  }
+
+  .dashboard-header nav ul {
+    gap: 0.5rem;
+  }
+
+  .dashboard-header nav a {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* Dark Mode Support */
+[data-theme="dark"] {
+  --dashboard-background: var(--pico-background-color);
+  --dashboard-card-background: var(--pico-card-background-color);
+  --dashboard-border: var(--pico-border-color);
+  --dashboard-text: var(--pico-color);
+  --dashboard-text-muted: var(--pico-muted-color);
+}
+
+/* Print Styles */
+@media print {
+  .dashboard-header,
+  .dashboard-footer,
+  .breadcrumb,
+  .messages,
+  .btn-group {
+    display: none;
+  }
+
+  .dashboard-main {
+    padding: 0;
+  }
+
+  .page-content {
+    box-shadow: none;
+    border: none;
+    padding: 0;
+  }
+}
+
+/* Accessibility Enhancements */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Focus States */
+.dashboard-header nav a:focus,
+.user-menu .dropdown summary:focus,
+.message .close:focus {
+  outline: 2px solid var(--dashboard-primary);
+  outline-offset: 2px;
+}
+
+/* Loading States */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+  position: relative;
+}
+
+.loading::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1rem;
+  height: 1rem;
+  margin: -0.5rem 0 0 -0.5rem;
+  border: 2px solid var(--dashboard-primary);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

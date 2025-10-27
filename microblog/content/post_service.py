@@ -90,9 +90,10 @@ class PostService:
         """
         try:
             # Prepare frontmatter data
+            from datetime import date as date_class
             frontmatter_data = {
                 'title': title,
-                'date': date or date.today(),
+                'date': date or date_class.today(),
                 'draft': draft
             }
 

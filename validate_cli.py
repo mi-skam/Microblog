@@ -6,9 +6,10 @@ This script validates that the CLI structure is correctly implemented
 without requiring installation.
 """
 
-import sys
 import importlib.util
+import sys
 from pathlib import Path
+
 
 def validate_cli_structure():
     """Validate that the CLI module is correctly structured."""
@@ -138,7 +139,7 @@ def validate_pyproject_toml():
     print("\n⚙️  Checking pyproject.toml...")
 
     try:
-        with open("pyproject.toml", "r") as f:
+        with open("pyproject.toml") as f:
             content = f.read()
 
         # Check for essential sections

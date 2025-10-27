@@ -6,14 +6,13 @@ with proper middleware layering, security headers, CORS configuration, and route
 """
 
 import logging
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from microblog.server.config import get_config, get_config_manager
+from microblog.server.config import get_config_manager
 from microblog.server.middleware import (
     AuthenticationMiddleware,
     CSRFProtectionMiddleware,

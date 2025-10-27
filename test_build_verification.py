@@ -7,7 +7,6 @@ This script runs the comprehensive build system tests and verifies coverage requ
 
 import subprocess
 import sys
-from pathlib import Path
 
 
 def run_command(cmd, description):
@@ -36,7 +35,7 @@ def main():
     print("=" * 60)
 
     # Change to project directory
-    project_dir = Path(__file__).parent
+    # project_dir = Path(__file__).parent  # Unused variable removed
 
     tests_passed = 0
     tests_total = 0

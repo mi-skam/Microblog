@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <meta name="description" content="Logout from Microblog Dashboard">
+    <meta name="robots" content="noindex, nofollow">
+
+    <!-- Pico.css Framework -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+
+    <!-- CSRF Token for forms -->
+    <meta name="csrf-token" content="{{ csrf_token }}">
+
+    <style>
+        .logout-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: var(--pico-spacing);
+        }
+
+        .logout-card {
+            width: 100%;
+            max-width: 400px;
+            padding: var(--pico-spacing);
+            background: var(--pico-card-background-color);
+            border-radius: var(--pico-border-radius);
+            box-shadow: var(--pico-card-box-shadow);
+            text-align: center;
+        }
+
+        .brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--pico-primary);
+            text-decoration: none;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .logout-actions {
+            display: flex;
+            gap: var(--pico-spacing);
+            margin-top: var(--pico-spacing);
+        }
+
+        .logout-actions form,
+        .logout-actions a {
+            flex: 1;
+        }
+
+        .logout-actions button,
+        .logout-actions a {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="logout-container">
+        <div class="logout-card">
+            <a href="/" class="brand">Microblog</a>
+            <h2>Confirm Logout</h2>
+            <p>Are you sure you want to logout from the dashboard?</p>
+
+            <div class="logout-actions">
+                <!-- Logout Form -->
+                <form method="post" action="/auth/logout">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" required>
+                    <button type="submit" class="primary">
+                        Yes, Logout
+                    </button>
+                </form>
+
+                <!-- Cancel Link -->
+                <a href="/dashboard" class="secondary" role="button">
+                    Cancel
+                </a>
+            </div>
+
+            <div style="margin-top: var(--pico-spacing);">
+                <small>
+                    <a href="/">← Back to Site</a>
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Basic form enhancement -->
+    <script>
+        // Handle logout form submission
+        document.querySelector('form').addEventListener('submit', function() {
+            const submitBtn = this.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Logging out...';
+        });
+    </script>
+</body>
+</html>

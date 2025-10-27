@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <meta name="description" content="Login to Microblog Dashboard">
+    <meta name="robots" content="noindex, nofollow">
+
+    <!-- Pico.css Framework -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+
+    <!-- CSRF Token for forms -->
+    <meta name="csrf-token" content="{{ csrf_token }}">
+
+    <style>
+        .login-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: var(--pico-spacing);
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 400px;
+            padding: var(--pico-spacing);
+            background: var(--pico-card-background-color);
+            border-radius: var(--pico-border-radius);
+            box-shadow: var(--pico-card-box-shadow);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: var(--pico-spacing);
+        }
+
+        .brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--pico-primary);
+            text-decoration: none;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .error-message {
+            background: var(--pico-del-background-color);
+            color: var(--pico-del-color);
+            border: 1px solid var(--pico-del-background-color);
+            border-radius: var(--pico-border-radius);
+            padding: var(--pico-form-element-spacing-vertical) var(--pico-form-element-spacing-horizontal);
+            margin-bottom: var(--pico-spacing);
+        }
+
+        .form-footer {
+            text-align: center;
+            margin-top: var(--pico-spacing);
+        }
+
+        .form-footer a {
+            color: var(--pico-muted-color);
+            text-decoration: none;
+            font-size: 0.875rem;
+        }
+
+        .form-footer a:hover {
+            color: var(--pico-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <a href="/" class="brand">Microblog</a>
+                <h2>Login to Dashboard</h2>
+                <p>Enter your credentials to access the admin panel</p>
+            </div>
+
+            <!-- Error Message Display -->
+            {% if error %}
+            <div class="error-message" role="alert">
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <!-- Login Form -->
+            <form method="post" action="/auth/login" novalidate>
+                <!-- CSRF Protection -->
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" required>
+
+                <!-- Username Field -->
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        placeholder="Enter your username"
+                        required
+                        autocomplete="username"
+                        autofocus
+                    >
+                </div>
+
+                <!-- Password Field -->
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        placeholder="Enter your password"
+                        required
+                        autocomplete="current-password"
+                    >
+                </div>
+
+                <!-- Submit Button -->
+                <div class="form-group">
+                    <button type="submit" class="primary">
+                        Login
+                    </button>
+                </div>
+            </form>
+
+            <div class="form-footer">
+                <a href="/">← Back to Site</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Basic form enhancement -->
+    <script>
+        // Handle form submission with basic client-side validation
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+
+            if (!username || !password) {
+                e.preventDefault();
+                alert('Please enter both username and password');
+                return false;
+            }
+
+            // Disable submit button to prevent double submission
+            const submitBtn = this.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Logging in...';
+        });
+
+        // Re-enable form on page load (in case of validation errors)
+        window.addEventListener('load', function() {
+            const submitBtn = document.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Login';
+            }
+        });
+    </script>
+</body>
+</html>

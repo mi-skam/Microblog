@@ -10,16 +10,16 @@ This is the full specification of the task you must complete.
 
 ```json
 {
-  "task_id": "I3.T1",
+  "task_id": "I3.T2",
   "iteration_id": "I3",
   "iteration_goal": "Implement core static site generator with template rendering, markdown processing, and atomic build system with backup/rollback",
-  "description": "Create build process sequence diagram showing atomic build workflow with backup creation, content processing, template rendering, and rollback mechanisms. Document the complete build safety strategy.",
-  "agent_type_hint": "DiagrammingAgent",
-  "inputs": "Build process requirements, atomic build strategy, backup/rollback mechanisms",
-  "target_files": ["docs/diagrams/build_process.puml"],
-  "input_files": [".codemachine/artifacts/plan/01_Plan_Overview_and_Setup.md"],
-  "deliverables": "PlantUML sequence diagram showing complete build workflow",
-  "acceptance_criteria": "Diagram shows atomic build process, backup creation illustrated, rollback mechanism documented, all build steps included",
+  "description": "Implement markdown processor with python-markdown and pymdown-extensions. Support YAML frontmatter parsing, syntax highlighting, and content validation.",
+  "agent_type_hint": "BackendAgent",
+  "inputs": "Markdown processing requirements, frontmatter specification, content validation rules",
+  "target_files": ["microblog/builder/markdown_processor.py"],
+  "input_files": ["microblog/content/post_service.py"],
+  "deliverables": "Markdown processing engine with frontmatter support, syntax highlighting, content validation",
+  "acceptance_criteria": "Markdown renders to HTML correctly, YAML frontmatter extracts properly, syntax highlighting works, content validation catches errors",
   "dependencies": ["I2.T4"],
   "parallelizable": true,
   "done": false
@@ -32,110 +32,96 @@ This is the full specification of the task you must complete.
 
 The following are the relevant sections from the architecture and plan documents, which I found by analyzing the task description.
 
-### Context: architectural-style (from 02_Architecture_Overview.md)
+### Context: task-i3-t2 (from 02_Iteration_I3.md)
 
 ```markdown
-**Primary Style: Hybrid Static-First Architecture with Separation of Concerns**
-
-The MicroBlog system employs a hybrid architectural approach that combines static site generation with a dynamic management interface. This design separates the public-facing blog (served as static files) from the administrative interface (dynamic web application), providing optimal performance for readers while maintaining ease of management for content creators.
-
-**Key Architectural Patterns:**
-
-1. **Static-First Generation**: The public blog is generated as static HTML files, ensuring maximum performance, security, and deployment flexibility. This eliminates runtime dependencies for content delivery and enables hosting on any static file server.
-
-2. **Layered Monolith for Management**: The dashboard and build system follow a layered architecture pattern with clear separation between presentation (HTMX-enhanced web interface), business logic (content management and site generation), and data access (filesystem and SQLite) layers.
-
-3. **Command-Query Separation**: Clear distinction between read operations (serving static content, dashboard views) and write operations (content modification, site rebuilds) with appropriate performance optimizations for each.
-
-4. **Progressive Enhancement**: The dashboard uses HTMX for enhanced interactivity while maintaining functionality without JavaScript, ensuring accessibility and reliability.
-
-**Rationale for Architectural Choice:**
-
-- **Performance**: Static files provide sub-100ms page loads and can handle high traffic without server resources
-- **Simplicity**: Monolithic dashboard avoids distributed system complexity while maintaining clear internal boundaries
-- **Deployment Flexibility**: Static output can be deployed anywhere (CDN, static hosts, traditional servers)
-- **Developer Experience**: Clear separation enables focused development on each concern without cross-cutting complexity
-- **Reliability**: Atomic builds with rollback capabilities ensure consistent site state
-- **Security**: Static content eliminates many attack vectors; dynamic interface has minimal surface area
-```
-
-### Context: core-architecture (from 01_Plan_Overview_and_Setup.md)
-
-```markdown
-*   **Architectural Style:** Hybrid Static-First Architecture with Layered Monolith for Management
-*   **Technology Stack:**
-    *   Frontend: HTMX 1.9+ (vendored), Pico.css (<10KB), Vanilla JavaScript (minimal)
-    *   Backend: FastAPI 0.100+, Python 3.10+, Uvicorn ASGI server
-    *   Database: SQLite3 (Python stdlib) for single user authentication
-    *   Template Engine: Jinja2 for HTML generation and dashboard rendering
-    *   Markdown: python-markdown + pymdown-extensions for content processing
-    *   Authentication: python-jose + passlib[bcrypt] for JWT and password hashing
-    *   CLI: Click for command-line interface and management tools
-    *   File Watching: watchfiles for development mode configuration hot-reload
-    *   Deployment: Docker-ready, systemd service, nginx/Caddy reverse proxy support
-*   **Key Components/Services:**
-    *   **Authentication Service**: JWT-based single-user authentication with bcrypt password hashing
-    *   **Content Management Service**: CRUD operations for posts with markdown processing and validation
-    *   **Static Site Generator**: Template rendering and asset copying with atomic build process
-    *   **Dashboard Web Application**: HTMX-enhanced interface for content management and live preview
-    *   **Image Management Service**: Upload, validation, and organization of media files
-    *   **Build Management Service**: Orchestrates site generation with backup and rollback capabilities
-    *   **CLI Interface**: Commands for build, serve, user creation, and system management
-    *   **Configuration Manager**: YAML-based settings with validation and hot-reload support
-```
-
-### Context: task-i3-t1 (from 02_Iteration_I3.md)
-
-```markdown
-*   **Task 3.1:**
-    *   **Task ID:** `I3.T1`
-    *   **Description:** Create build process sequence diagram showing atomic build workflow with backup creation, content processing, template rendering, and rollback mechanisms. Document the complete build safety strategy.
-    *   **Agent Type Hint:** `DiagrammingAgent`
-    *   **Inputs:** Build process requirements, atomic build strategy, backup/rollback mechanisms
-    *   **Input Files:** [".codemachine/artifacts/plan/01_Plan_Overview_and_Setup.md"]
-    *   **Target Files:** ["docs/diagrams/build_process.puml"]
-    *   **Deliverables:** PlantUML sequence diagram showing complete build workflow
-    *   **Acceptance Criteria:** Diagram shows atomic build process, backup creation illustrated, rollback mechanism documented, all build steps included
+<!-- anchor: task-i3-t2 -->
+*   **Task 3.2:**
+    *   **Task ID:** `I3.T2`
+    *   **Description:** Implement markdown processor with python-markdown and pymdown-extensions. Support YAML frontmatter parsing, syntax highlighting, and content validation.
+    *   **Agent Type Hint:** `BackendAgent`
+    *   **Inputs:** Markdown processing requirements, frontmatter specification, content validation rules
+    *   **Input Files:** ["microblog/content/post_service.py"]
+    *   **Target Files:** ["microblog/builder/markdown_processor.py"]
+    *   **Deliverables:** Markdown processing engine with frontmatter support, syntax highlighting, content validation
+    *   **Acceptance Criteria:** Markdown renders to HTML correctly, YAML frontmatter extracts properly, syntax highlighting works, content validation catches errors
     *   **Dependencies:** `I2.T4`
     *   **Parallelizable:** Yes
 ```
 
-### Context: directory-structure (from 01_Plan_Overview_and_Setup.md)
+### Context: iteration-3-plan (from 02_Iteration_I3.md)
 
 ```markdown
-microblog/
-├── microblog/                      # Main Python package
-│   ├── builder/                    # Static site generation
-│   │   ├── __init__.py
-│   │   ├── generator.py            # Main build orchestration
-│   │   ├── markdown_processor.py   # Markdown parsing and frontmatter
-│   │   ├── template_renderer.py    # Jinja2 template rendering
-│   │   └── asset_manager.py        # Image and static file copying
-├── content/                        # User content directory (runtime)
-│   ├── posts/                      # Markdown blog posts
-│   ├── pages/                      # Static pages (about, contact, etc.)
-│   ├── images/                     # User-uploaded images
-│   └── _data/
-│       └── config.yaml             # Site configuration
-├── build/                          # Generated static site (gitignored)
-├── build.bak/                      # Build backup directory (gitignored)
+<!-- anchor: iteration-3-plan -->
+### Iteration 3: Static Site Generation & Build System
+
+*   **Iteration ID:** `I3`
+*   **Goal:** Implement core static site generator with template rendering, markdown processing, and atomic build system with backup/rollback
+*   **Prerequisites:** `I2` (Authentication and core models completed)
+*   **Tasks:**
 ```
 
-### Context: project-overview (from 01_Plan_Overview_and_Setup.md)
+### Context: key-entities (from 03_System_Structure_and_Data.md)
 
 ```markdown
-*   **Goal:** Develop a lightweight, self-hosted blogging platform that generates static HTML pages for performance while providing a dynamic HTMX-powered dashboard for content management.
-*   **High-Level Requirements Summary:**
-    *   Single-user authentication with JWT-based session management
-    *   Markdown-based post creation and editing with YAML frontmatter
-    *   Static site generation with full rebuild strategy (<5s for 100 posts)
-    *   HTMX-enhanced dashboard for CRUD operations without full page refreshes
-    *   Filesystem-based image storage with automatic build-time copying
-    *   Tag-based content organization and RSS feed generation
-    *   CLI tools for build, serve, and user management operations
-    *   Build backup and atomic rollback mechanisms for reliability
-    *   Configuration hot-reload in development mode
-    *   Live markdown preview during content editing
+<!-- anchor: key-entities -->
+**Key Entities:**
+
+1. **User**: Single admin user with authentication credentials (stored in SQLite)
+2. **Post**: Blog posts with metadata and content (stored as markdown files with YAML frontmatter)
+3. **Image**: Media files referenced in posts (stored in filesystem with metadata tracking)
+4. **Configuration**: System settings and blog metadata (stored as YAML configuration file)
+5. **Session**: Authentication sessions (stateless JWT tokens, no persistent storage)
+```
+
+### Context: data-model-diagram (from 03_System_Structure_and_Data.md)
+
+```markdown
+entity "Post File" as post {
+  --
+  **Frontmatter (YAML)**
+  title : VARCHAR(200)
+  date : DATE
+  slug : VARCHAR(200) <<optional>>
+  tags : ARRAY[VARCHAR]
+  draft : BOOLEAN = false
+  description : VARCHAR(300)
+  --
+  **Content (Markdown)**
+  content : TEXT
+  --
+  **File Metadata**
+  file_path : VARCHAR(500)
+  created_at : TIMESTAMP
+  modified_at : TIMESTAMP
+}
+```
+
+### Context: data-storage-strategy (from 03_System_Structure_and_Data.md)
+
+```markdown
+<!-- anchor: data-storage-strategy -->
+**Data Storage Strategy:**
+
+**SQLite Database (microblog.db):**
+- Stores single user authentication record
+- Lightweight, serverless, no external dependencies
+- Automatic schema creation on first run
+- Handles concurrent read access (dashboard operations)
+
+**File System Storage (content/):**
+- Markdown files with YAML frontmatter for posts
+- Images stored in organized directory structure
+- Configuration as human-readable YAML
+- Version control friendly (Git integration possible)
+- Direct file system access for build process
+
+**Generated Output (build/):**
+- Static HTML, CSS, and JavaScript files
+- Copied and optimized images
+- RSS feed and sitemap generation
+- Atomic generation with backup/rollback
+- Deployable to any static file server
 ```
 
 ---
@@ -145,43 +131,33 @@ microblog/
 The following analysis is based on my direct review of the current codebase. Use these notes and tips to guide your implementation.
 
 ### Relevant Existing Code
+*   **File:** `microblog/content/post_service.py`
+    *   **Summary:** This file contains the complete PostService class that manages blog posts with filesystem storage, including CRUD operations, frontmatter parsing, and file handling. It already has a working `_parse_markdown_file` method that parses YAML frontmatter.
+    *   **Recommendation:** You MUST study this file carefully as it shows the expected frontmatter structure and how posts are loaded/parsed. The PostService already handles frontmatter parsing with regex and yaml.safe_load(). Your markdown processor should complement this by focusing on the markdown-to-HTML conversion.
+
+*   **File:** `microblog/content/validators.py`
+    *   **Summary:** This file defines the PostFrontmatter and PostContent dataclasses used throughout the system for validating blog post structure and metadata.
+    *   **Recommendation:** You SHOULD import and use these validation classes in your markdown processor. The PostContent and PostFrontmatter models are the standard data structures expected by the rest of the system.
+
+*   **File:** `pyproject.toml`
+    *   **Summary:** The project dependencies already include `markdown>=3.5.0` and `pymdown-extensions>=10.0.0`, exactly what you need for this task.
+    *   **Recommendation:** You can directly import and use these libraries - they are already installed and configured as project dependencies.
 
 *   **File:** `microblog/builder/__init__.py`
-    *   **Summary:** Package initialization for static site generation components. Contains basic documentation about the module's purpose.
-    *   **Recommendation:** This is the target directory for your diagram output. The builder package already exists and is properly set up.
-
-*   **File:** `microblog/content/post_service.py`
-    *   **Summary:** Comprehensive post service implementing CRUD operations for markdown posts with YAML frontmatter. Contains file system operations, validation, and error handling.
-    *   **Recommendation:** Your sequence diagram MUST reference this service as it handles the content processing step of the build workflow. Import the PostService class to understand post loading/validation patterns.
-
-*   **File:** `microblog/server/config.py`
-    *   **Summary:** Configuration management system with YAML parsing, validation, hot-reload, and Pydantic models for BuildConfig including backup_dir and output_dir settings.
-    *   **Recommendation:** Your diagram MUST show the configuration loading step as it provides build directories (build/ and build.bak/). The BuildConfig class defines backup_dir='build.bak' and output_dir='build'.
-
-*   **File:** `docs/diagrams/component_diagram.puml`
-    *   **Summary:** Existing PlantUML component diagram showing dashboard application architecture with Build Management Service component.
-    *   **Recommendation:** Use the same PlantUML syntax and styling. Note that a "Build Management Service" component is already defined - your sequence diagram should show the detailed workflow this service orchestrates.
-
-*   **File:** `docs/diagrams/database_erd.puml`
-    *   **Summary:** Database ERD showing file system entities including Post Files and Config Files with their structure and metadata.
-    *   **Recommendation:** Your sequence diagram should reference these entities as data sources for the build process. Posts are stored as .md files in content/posts/, and config is in content/_data/config.yaml.
+    *   **Summary:** This is the builder package where your markdown processor will live. It's currently just a package docstring describing static site generation components.
+    *   **Recommendation:** Your new `markdown_processor.py` file should go in this directory alongside the existing `__init__.py`.
 
 ### Implementation Tips & Notes
+*   **Tip:** The PostService already has frontmatter parsing logic in `_parse_markdown_file()` method using regex pattern `r'^---\s*\n(.*?)\n---\s*\n(.*)$'` and `yaml.safe_load()`. You should use a similar or compatible approach in your processor.
+*   **Note:** The project uses structured logging with the `logging` module. Follow the same pattern by getting a logger with `logger = logging.getLogger(__name__)` at the module level.
+*   **Warning:** The PostService expects date objects to be converted to/from ISO strings when serializing YAML. Your processor should handle date objects properly for consistency.
+*   **Code Style:** The project uses dataclasses, type hints, and follows the existing patterns seen in other modules. Follow the same conventions with proper docstrings and error handling.
+*   **Validation Integration:** The existing code uses `validate_post_content()` function from validators.py - your markdown processor should work with these validated PostContent objects.
+*   **Directory Structure:** Content is stored in `content/posts/` directory, and the project expects markdown files with `.md` extension and specific filename patterns like `YYYY-MM-DD-slug.md`.
+*   **Dependencies:** The project already includes python-frontmatter in dependencies, but the current PostService uses manual YAML parsing instead. You could choose either approach, but should remain consistent with existing patterns.
 
-*   **Tip:** The codebase already has a clear builder package structure (`microblog/builder/`) that will house the actual implementation components referenced in the sequence diagram.
-
-*   **Note:** The project uses a specific directory structure where `content/` contains source materials, `build/` is the output directory, and `build.bak/` is the backup location. Your diagram MUST show these exact paths.
-
-*   **Warning:** The PostService already implements comprehensive file operations and validation. Your diagram should show how the build process leverages this existing service rather than duplicating file operations.
-
-*   **Convention:** Existing PlantUML diagrams use C4 model includes (`!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml`). Follow the same pattern for consistency.
-
-*   **Key Build Requirements:** Based on the configuration and existing code, the atomic build process must:
-    1. Create backup of existing build/ directory to build.bak/
-    2. Load configuration from content/_data/config.yaml
-    3. Process markdown posts from content/posts/ using PostService
-    4. Render templates to HTML (future components)
-    5. Copy assets from content/images/ (future components)
-    6. Atomically replace build/ directory or rollback on failure
-
-*   **Safety Strategy:** The diagram must show error handling at each step with rollback to build.bak/ if any step fails, ensuring the build directory is never left in a broken state.
+### Strategic Recommendations
+*   **Primary Goal:** Create a markdown processor that takes validated PostContent objects and converts the markdown content to HTML with syntax highlighting, while preserving the frontmatter structure.
+*   **Integration Point:** Your processor should work seamlessly with the existing PostService and validation system - don't duplicate frontmatter parsing logic.
+*   **Error Handling:** Follow the existing exception patterns (PostFileError, PostValidationError) defined in post_service.py for consistency.
+*   **Testing:** The project has a comprehensive test suite in `tests/unit/` - you should design your processor to be easily testable with similar patterns.

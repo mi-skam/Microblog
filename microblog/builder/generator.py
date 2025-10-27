@@ -8,11 +8,12 @@ template rendering, and asset copying with safety mechanisms and progress tracki
 
 import logging
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from microblog.builder.asset_manager import get_asset_manager
 from microblog.builder.markdown_processor import get_markdown_processor

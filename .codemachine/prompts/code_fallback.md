@@ -8,32 +8,28 @@ The previous code submission did not pass verification. You must fix the followi
 
 Create integration tests for dashboard functionality including authentication flows, post management operations, and form submissions. Test complete user workflows.
 
-**Acceptance Criteria:** All dashboard routes tested, authentication flows verified, form submissions tested, user workflows covered, test coverage >80%
-
 ---
 
 ## Issues Detected
 
-*   **Test Failure:** All tests in both `test_dashboard.py` and `test_auth_flows.py` are failing due to database connection issues and application startup problems. The tests show "PermissionError: [WinError 32] Der Prozess kann nicht auf die Datei zugreifen, da sie von einem anderen Prozess verwendet wird" with SQLite database files.
-*   **Low Test Coverage:** Test coverage is only 18%, far below the required >80% coverage threshold.
-*   **Linting Errors:** Multiple linting issues including unused imports (`uuid4`, `datetime`, `PostContent`, `PostFrontmatter`), unused variables (`status_response`, `jwt_token`), and missing newlines at end of files.
-*   **Database Resource Management:** Tests show "ResourceWarning: unclosed database in <sqlite3.Connection object>" indicating improper database connection handling.
-*   **Application Integration Issues:** Tests fail to properly initialize the FastAPI application with proper database and configuration setup.
+*   **Template Resolution Issue:** The integration tests are failing because the dashboard routes are hardcoded to load templates from the project root `templates` directory, but the test fixtures are creating temporary templates in a different location. This causes "template not found" errors during test execution.
+
+*   **Template Mocking Problem:** The test fixtures in both `test_dashboard.py` and `test_auth_flows.py` create temporary templates in the content directory structure, but the `Jinja2Templates` initialization in `microblog/server/routes/dashboard.py` uses a hardcoded path that doesn't get mocked properly.
+
+*   **Integration Test Coverage:** While the tests are comprehensive in structure, they fail to execute successfully due to the template loading issue, preventing proper validation of the dashboard and authentication workflows.
 
 ---
 
 ## Best Approach to Fix
 
-You MUST completely rewrite the integration tests to properly handle database connections, application setup, and resource management. The core issues are:
+You MUST modify the template initialization in the dashboard routes to be mockable during testing. The current hardcoded approach in `microblog/server/routes/dashboard.py` line 31 needs to be replaced with a configuration-based or injectable approach that can be properly mocked in tests.
 
-1. **Database Connection Management:** Implement proper database connection cleanup in test fixtures to prevent file locking issues on Windows. Use `@pytest.fixture(scope="function")` with explicit connection closing.
+Options to fix this:
 
-2. **Application Factory Pattern:** Fix the application initialization to properly mock dependencies and avoid actual database file creation that causes permission issues.
+1. **Modify dashboard.py**: Replace the hardcoded template directory with a configurable path that can be overridden during testing
+2. **Update test fixtures**: Mock the `templates` object directly in the dashboard routes module instead of trying to mock the template directory path
+3. **Create template factory**: Use a template factory function that can be easily mocked during testing
 
-3. **Test Coverage:** Ensure the integration tests actually exercise the authentication and dashboard routes properly to achieve >80% test coverage. The current tests are not running successfully so coverage is artificially low.
+The same issue likely exists in other route modules that use templates, so ensure a consistent approach across all route modules.
 
-4. **Resource Cleanup:** Add proper teardown in test fixtures to close all database connections and clean up temporary files.
-
-5. **Linting:** Remove all unused imports and add proper newlines at end of files.
-
-Fix the database connection handling first, then ensure all tests pass and achieve the required coverage threshold.
+After fixing the template loading issue, re-run the integration tests to verify they pass and achieve the required >80% test coverage.

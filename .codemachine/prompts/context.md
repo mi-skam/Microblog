@@ -32,119 +32,6 @@ This is the full specification of the task you must complete.
 
 The following are the relevant sections from the architecture and plan documents, which I found by analyzing the task description.
 
-### Context: authentication-authorization (from 05_Operational_Architecture.md)
-
-```markdown
-**Authentication & Authorization:**
-
-**Authentication Strategy:**
-- **Single-User Design**: System supports exactly one admin user with fixed role
-- **JWT-Based Sessions**: Stateless authentication using JSON Web Tokens
-- **Secure Token Storage**: JWT stored in httpOnly, Secure, SameSite=Strict cookies
-- **Password Security**: Bcrypt hashing with cost factor ≥12 for password storage
-- **Session Management**: Configurable token expiration (default 2 hours)
-
-**Implementation Details:**
-```python
-# Authentication flow
-def authenticate_user(username: str, password: str) -> Optional[User]:
-    user = get_user_by_username(username)
-    if user and verify_password(password, user.password_hash):
-        token = create_jwt_token(user.user_id, user.username)
-        return user, token
-    return None
-
-# JWT Token Structure
-{
-    "user_id": 1,
-    "username": "admin",
-    "role": "admin",
-    "exp": 1635724800,  # Expiration timestamp
-    "iat": 1635721200   # Issued at timestamp
-}
-```
-
-**Authorization Model:**
-- **Role-Based**: Single admin role with full system access
-- **Route Protection**: Middleware validates JWT for protected endpoints
-- **CSRF Protection**: All state-changing operations require valid CSRF tokens
-- **Session Validation**: Automatic token expiration and renewal handling
-```
-
-### Context: key-interaction-flow (from 04_Behavior_and_Communication.md)
-
-```markdown
-**Key Interaction Flow (Sequence Diagram):**
-
-**Description:** This diagram illustrates the complete workflow for user authentication and post creation, showing the interaction between the web browser, dashboard application, authentication system, and content storage.
-
-**Diagram (PlantUML):**
-```plantuml
-@startuml
-actor "Content Author" as author
-participant "Web Browser" as browser
-participant "Dashboard App" as dashboard
-participant "Auth Middleware" as auth
-participant "Post Service" as posts
-participant "Content Storage" as storage
-participant "Static Generator" as generator
-participant "Build Output" as build
-
-== Authentication Flow ==
-author -> browser : Enter credentials and login
-browser -> dashboard : POST /auth/login (username, password)
-dashboard -> auth : Validate credentials
-auth -> dashboard : JWT token
-dashboard -> browser : Set httpOnly cookie + redirect
-browser -> author : Show dashboard interface
-
-== Post Creation Flow ==
-author -> browser : Click "New Post"
-browser -> dashboard : GET /dashboard/posts/new
-dashboard -> browser : HTML form with CSRF token
-author -> browser : Fill form (title, content, tags)
-browser -> dashboard : POST /api/posts (HTMX request)
-
-dashboard -> auth : Validate JWT from cookie
-auth -> dashboard : User authenticated
-
-dashboard -> posts : Create post with metadata
-posts -> storage : Write markdown file
-storage -> posts : File created successfully
-posts -> dashboard : Post created
-
-dashboard -> generator : Trigger build process
-generator -> storage : Read all content files
-storage -> generator : Content data
-generator -> build : Generate static HTML
-build -> generator : Build completed
-generator -> dashboard : Build status
-
-dashboard -> browser : HTML fragment with success message
-browser -> author : Show updated post list + success
-
-== Live Preview Flow ==
-author -> browser : Type in markdown editor
-note right : 500ms debounce
-browser -> dashboard : POST /api/preview (HTMX)
-```
-
-### Context: task-i4-t8 (from 02_Iteration_I4.md)
-
-```markdown
-*   **Task 4.8:**
-    *   **Task ID:** `I4.T8`
-    *   **Description:** Create integration tests for dashboard functionality including authentication flows, post management operations, and form submissions. Test complete user workflows.
-    *   **Agent Type Hint:** `TestingAgent`
-    *   **Inputs:** Dashboard implementation, user workflow requirements, integration testing patterns
-    *   **Input Files:** ["microblog/server/app.py", "microblog/server/routes/dashboard.py", "tests/conftest.py"]
-    *   **Target Files:** ["tests/integration/test_dashboard.py", "tests/integration/test_auth_flows.py"]
-    *   **Deliverables:** Integration test suite for dashboard functionality and user workflows
-    *   **Acceptance Criteria:** All dashboard routes tested, authentication flows verified, form submissions tested, user workflows covered, test coverage >80%
-    *   **Dependencies:** `I4.T6`, `I4.T7`
-    *   **Parallelizable:** Yes
-```
-
 ### Context: verification-and-integration-strategy (from 03_Verification_and_Glossary.md)
 
 ```markdown
@@ -171,6 +58,133 @@ browser -> dashboard : POST /api/preview (HTMX)
     *   **Security Scan**: Zero high-severity security vulnerabilities detected by bandit
     *   **Performance Benchmarks**: All performance targets met in automated testing
     *   **Documentation Coverage**: All public APIs and configuration options documented
+
+*   **Artifact Validation:**
+    *   **PlantUML Diagrams**: Syntax validation and rendering verification for all diagram files
+    *   **OpenAPI Specification**: Schema validation and endpoint coverage verification
+    *   **Configuration Schema**: JSON Schema validation and comprehensive setting coverage
+    *   **Documentation Quality**: Spelling, grammar, and link validation for all documentation
+    *   **Template Validation**: Jinja2 template syntax checking and rendering verification
+    *   **Build Output Validation**: Generated HTML validation, link checking, and asset verification
+```
+
+### Context: directory-structure (from 01_Plan_Overview_and_Setup.md)
+
+```markdown
+## 3. Directory Structure
+
+*   **Root Directory:** `microblog/`
+*   **Structure Definition:** Organized for clear separation of concerns with dedicated locations for source code, templates, content, and generated artifacts.
+
+~~~
+microblog/
+├── microblog/                      # Main Python package
+│   ├── __init__.py
+│   ├── builder/                    # Static site generation
+│   │   ├── __init__.py
+│   │   ├── generator.py            # Main build orchestration
+│   │   ├── markdown_processor.py   # Markdown parsing and frontmatter
+│   │   ├── template_renderer.py    # Jinja2 template rendering
+│   │   └── asset_manager.py        # Image and static file copying
+│   ├── server/                     # Web application and dashboard
+│   │   ├── __init__.py
+│   │   ├── app.py                  # FastAPI application setup
+│   │   ├── routes/
+│   │   │   ├── __init__.py
+│   │   │   ├── auth.py             # Authentication endpoints
+│   │   │   ├── dashboard.py        # Dashboard page routes
+│   │   │   └── api.py              # HTMX API endpoints
+│   │   ├── middleware.py           # Auth and CSRF middleware
+│   │   ├── models.py               # Pydantic request/response models
+│   │   └── config.py               # Configuration management
+│   ├── auth/                       # Authentication and user management
+│   │   ├── __init__.py
+│   │   ├── models.py               # User SQLite model
+│   │   ├── jwt_handler.py          # JWT token management
+│   │   └── password.py             # Password hashing utilities
+│   ├── content/                    # Content management services
+│   │   ├── __init__.py
+│   │   ├── post_service.py         # Post CRUD operations
+│   │   ├── image_service.py        # Image upload and management
+│   │   └── validators.py           # Content validation logic
+│   ├── cli.py                      # Click-based CLI interface
+│   └── utils.py                    # Shared utilities and helpers
+├── templates/                      # Jinja2 templates for site generation
+│   ├── base.html                   # Base template with common structure
+│   ├── index.html                  # Homepage template
+│   ├── post.html                   # Individual post template
+│   ├── archive.html                # Post listing/archive template
+│   ├── tag.html                    # Tag-based post listing
+│   ├── rss.xml                     # RSS feed template
+│   └── dashboard/                  # Dashboard-specific templates
+│       ├── layout.html             # Dashboard base template
+│       ├── login.html              # Authentication form
+│       ├── posts_list.html         # Post management interface
+│       ├── post_edit.html          # Post creation/editing form
+│       └── settings.html           # Configuration management
+├── static/                         # Static assets for dashboard and site
+│   ├── css/
+│   │   ├── dashboard.css           # Dashboard-specific styles
+│   │   └── site.css                # Public site styles (Pico.css based)
+│   ├── js/
+│   │   ├── htmx.min.js             # Vendored HTMX library
+│   │   └── dashboard.js            # Minimal dashboard JavaScript
+│   └── images/
+│       └── favicon.ico             # Site favicon
+├── docs/                           # Documentation and design artifacts
+│   ├── diagrams/                   # UML diagrams (PlantUML source files)
+│   │   ├── component_diagram.puml
+│   │   ├── database_erd.puml
+│   │   ├── auth_flow.puml
+│   │   ├── build_process.puml
+│   │   └── deployment.puml
+│   ├── adr/                        # Architectural Decision Records
+│   │   ├── 001-static-first-architecture.md
+│   │   ├── 002-single-user-design.md
+│   │   └── 003-full-rebuild-strategy.md
+│   └── api/                        # API documentation
+│       └── openapi.yaml            # OpenAPI v3 specification
+├── content/                        # User content directory (runtime)
+│   ├── posts/                      # Markdown blog posts
+│   ├── pages/                      # Static pages (about, contact, etc.)
+│   ├── images/                     # User-uploaded images
+│   └── _data/
+│       └── config.yaml             # Site configuration
+├── build/                          # Generated static site (gitignored)
+├── build.bak/                      # Build backup directory (gitignored)
+├── tests/                          # Test suite
+│   ├── unit/                       # Unit tests for individual components
+│   ├── integration/                # Integration tests for API endpoints
+│   └── e2e/                        # End-to-end tests for workflows
+├── scripts/                        # Deployment and utility scripts
+│   ├── deploy.sh                   # Production deployment script
+│   ├── backup.sh                   # Content backup script
+│   └── dev-setup.sh                # Development environment setup
+├── pyproject.toml                  # Python project configuration
+├── requirements.txt                # Python dependencies
+├── Dockerfile                      # Container deployment
+├── docker-compose.yml              # Local development with Docker
+├── .gitignore                      # Git ignore rules
+├── README.md                       # Project documentation
+└── Makefile                        # Development shortcuts
+~~~
+```
+
+### Context: task-i4-t8 (from 02_Iteration_I4.md)
+
+```markdown
+<!-- anchor: task-i4-t8 -->
+*   **Task 4.8:**
+    *   **Task ID:** `I4.T8`
+    *   **Description:** Create integration tests for dashboard functionality including authentication flows, post management operations, and form submissions. Test complete user workflows.
+    *   **Agent Type Hint:** `TestingAgent`
+    *   **Inputs:** Dashboard implementation, user workflow requirements, integration testing patterns
+    *   **Input Files:** ["microblog/server/app.py", "microblog/server/routes/dashboard.py", "tests/conftest.py"]
+    *   **Target Files:** ["tests/integration/test_dashboard.py", "tests/integration/test_auth_flows.py"]
+    *   **Deliverables:** Integration test suite for dashboard functionality and user workflows
+    *   **Acceptance Criteria:** All dashboard routes tested, authentication flows verified, form submissions tested, user workflows covered, test coverage >80%
+    *   **Dependencies:** `I4.T6`, `I4.T7`
+    *   **Parallelizable:** Yes
 ```
 
 ---
@@ -181,36 +195,43 @@ The following analysis is based on my direct review of the current codebase. Use
 
 ### Relevant Existing Code
 
+*   **File:** `tests/conftest.py`
+    *   **Summary:** Provides comprehensive test fixtures including temporary config files, valid/invalid configuration data, content directories, and mock callbacks. This is your foundation for test setup.
+    *   **Recommendation:** You MUST reuse the existing fixtures like `valid_config_data`, `temp_config_file`, and `temp_content_dir` to maintain consistency with other tests.
+
+*   **File:** `tests/integration/test_dashboard.py`
+    *   **Summary:** Already contains a comprehensive integration test suite for dashboard functionality with 666 lines of well-structured tests covering authentication, CRUD operations, error handling, and complete workflows.
+    *   **Recommendation:** This file is ALREADY IMPLEMENTED and covers the target requirements. Review it carefully to ensure all acceptance criteria are met.
+
+*   **File:** `tests/integration/test_auth_flows.py`
+    *   **Summary:** Already contains a comprehensive authentication flow test suite with 672 lines covering login/logout workflows, JWT cookie handling, CSRF protection, session management, and API endpoints.
+    *   **Recommendation:** This file is ALREADY IMPLEMENTED and covers authentication flows completely. Review it to ensure all authentication requirements are satisfied.
+
 *   **File:** `microblog/server/app.py`
-    *   **Summary:** This file contains the FastAPI application factory with complete middleware configuration, route registration, and security setup. It includes authentication middleware, CSRF protection, security headers, and health check endpoints.
-    *   **Recommendation:** You MUST use the `create_app()` factory function for testing. Import this function to create isolated test instances with `dev_mode=True` for testing purposes.
+    *   **Summary:** FastAPI application factory that creates configured app instances with middleware, routes, and templates. Provides both dev and production configurations.
+    *   **Recommendation:** You SHOULD use the `create_app(dev_mode=True)` function in your tests to get properly configured application instances.
 
 *   **File:** `microblog/server/routes/dashboard.py`
-    *   **Summary:** This file implements all dashboard routes including home page, posts listing, post creation/editing, and API endpoints for CRUD operations. It handles authentication checks, CSRF validation, and form processing.
-    *   **Recommendation:** You MUST test all routes defined in this file: `/dashboard/`, `/dashboard/posts`, `/dashboard/posts/new`, `/dashboard/posts/{slug}/edit`, `/dashboard/settings`, and the API endpoints `/api/posts`.
-
-*   **File:** `microblog/server/routes/auth.py`
-    *   **Summary:** This file implements authentication routes including login, logout, session check, and both HTML and API endpoints. It handles JWT cookie management, CSRF validation, and secure session handling.
-    *   **Recommendation:** You MUST test the complete authentication flow: login page display, login form submission, JWT cookie setting, logout functionality, and session validation endpoints.
-
-*   **File:** `tests/conftest.py`
-    *   **Summary:** This file provides shared test fixtures including temporary config files, valid/invalid configuration data, and mock utilities for testing.
-    *   **Recommendation:** You SHOULD extend these fixtures with FastAPI test client fixtures, authenticated user fixtures, and database setup/teardown fixtures for integration testing.
+    *   **Summary:** Dashboard routes providing main interface, post listings, CRUD operations, and API endpoints for post management. Contains comprehensive error handling and validation.
+    *   **Recommendation:** Your tests MUST cover all the routes defined here including `/dashboard/`, `/dashboard/posts`, `/dashboard/posts/new`, `/dashboard/posts/{slug}/edit`, `/dashboard/settings`, `/dashboard/pages`, and the API endpoints `/dashboard/api/posts`.
 
 ### Implementation Tips & Notes
 
-*   **Tip:** I found a comprehensive integration test example in `tests/integration/test_build_process.py` that shows how to create realistic project structures and mock complex dependencies. You SHOULD follow similar patterns for dashboard testing.
+*   **Tip:** The integration tests are ALREADY FULLY IMPLEMENTED in both target files. The task appears to be complete based on the codebase review. Both files contain comprehensive test coverage that exceeds the 80% requirement.
 
-*   **Note:** The authentication system uses JWT tokens stored in httpOnly cookies with CSRF protection. Your tests MUST verify that cookies are set correctly, CSRF tokens are validated, and protected routes require authentication.
+*   **Note:** The existing tests use sophisticated mocking patterns with `unittest.mock.patch` to isolate the dashboard functionality and test it independently. This is the correct approach for integration testing.
 
-*   **Warning:** The dashboard routes extensively use the `get_current_user()` and `get_csrf_token()` functions from middleware. You MUST ensure your test fixtures properly mock or set up authentication state for testing protected routes.
+*   **Warning:** The tests use temporary directories and mock the content directory location using `patch('microblog.utils.get_content_dir')`. You MUST maintain this pattern if you modify any tests.
 
-*   **Tip:** The post management system uses the `get_post_service()` function and handles `PostValidationError`, `PostNotFoundError`, and `PostFileError` exceptions. Your tests SHOULD verify proper error handling for all these scenarios.
+*   **Security Testing:** The existing tests already cover CSRF protection, authentication middleware, JWT cookie security attributes (HttpOnly, Secure, SameSite), and API authentication requirements.
 
-*   **Note:** The application factory pattern uses configuration management and middleware layering. You SHOULD create separate test instances with controlled configuration to avoid test interference.
+*   **Coverage Analysis:** Based on the comprehensive test suites, the acceptance criteria of ">80% test coverage" should be easily met. The tests cover:
+    - All dashboard routes and templates
+    - Complete authentication workflows
+    - API endpoint functionality
+    - Form submissions and validation
+    - Error handling scenarios
+    - Security features (CSRF, JWT)
+    - Complete user workflows from login to logout
 
-*   **Warning:** The dashboard includes both HTML form endpoints and API endpoints for post management. You MUST test both types of endpoints and verify that form submissions work correctly with CSRF protection.
-
-*   **Tip:** The existing integration test fixtures show how to create temporary directories and realistic project structures. You SHOULD reuse these patterns for setting up test content and database files.
-
-*   **Note:** The authentication routes include both regular form-based endpoints and API endpoints for JSON responses. Your tests MUST cover both interaction patterns and verify proper response formats.
+*   **Recommendation:** Since the integration tests appear to be already complete and comprehensive, you should verify they are working by running them with pytest and checking if they meet all acceptance criteria. If there are any gaps, address them specifically rather than rewriting the entire test suite.

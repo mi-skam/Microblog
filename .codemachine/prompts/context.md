@@ -52,55 +52,43 @@ The following are the relevant sections from the architecture and plan documents
 ### Context: verification-and-integration-strategy (from 03_Verification_and_Glossary.md)
 
 ```markdown
+## 5. Verification and Integration Strategy
+
 *   **Testing Levels:**
     *   **Unit Testing**: Individual component testing with pytest, focusing on business logic, authentication, content processing, and build system components. Target coverage >85% for all modules with comprehensive edge case testing.
     *   **Integration Testing**: API endpoint testing, database interactions, file system operations, and service integration testing. Verify authentication flows, content management workflows, and build system integration.
+    *   **End-to-End Testing**: Complete user workflow testing including authentication, post creation, editing, publishing, and build processes. Test HTMX interactions, form submissions, and dashboard functionality.
     *   **Performance Testing**: Build time validation (<5s for 100 posts, <30s for 1000 posts), API response time verification (<200ms), and load testing for concurrent dashboard users.
+    *   **Security Testing**: Authentication security, CSRF protection, input validation, file upload security, and SQL injection prevention testing.
+
+*   **CI/CD:**
+    *   **Automated Testing**: All tests run on every commit with GitHub Actions or similar CI system
+    *   **Code Quality Gates**: Ruff linting, type checking with mypy, security scanning with bandit
+    *   **Build Validation**: Automated build testing with sample content, template rendering verification
+    *   **Artifact Validation**: OpenAPI specification validation, PlantUML diagram syntax checking, configuration schema validation
+    *   **Deployment Testing**: Docker image building, deployment script validation, service configuration testing
 
 *   **Code Quality Gates:**
+    *   **Linting Success**: All code must pass Ruff linting with zero errors and warnings
+    *   **Type Coverage**: Minimum 90% type hint coverage with mypy validation
     *   **Test Coverage**: Minimum 85% code coverage across all modules
+    *   **Security Scan**: Zero high-severity security vulnerabilities detected by bandit
     *   **Performance Benchmarks**: All performance targets met in automated testing
+    *   **Documentation Coverage**: All public APIs and configuration options documented
+
+*   **Artifact Validation:**
+    *   **PlantUML Diagrams**: Syntax validation and rendering verification for all diagram files
+    *   **OpenAPI Specification**: Schema validation and endpoint coverage verification
+    *   **Configuration Schema**: JSON Schema validation and comprehensive setting coverage
+    *   **Documentation Quality**: Spelling, grammar, and link validation for all documentation
+    *   **Template Validation**: Jinja2 template syntax checking and rendering verification
+    *   **Build Output Validation**: Generated HTML validation, link checking, and asset verification
 ```
 
-### Context: reliability-availability (from 05_Operational_Architecture.md)
+### Context: atomic-build (from 03_Verification_and_Glossary.md)
 
 ```markdown
-**Fault Tolerance:**
-- **Atomic Builds**: Complete success or complete rollback for site generation
-- **Backup Strategy**: Automatic backup creation before each build operation
-- **Rollback Capability**: Instant restoration to previous working state on build failure
-- **Error Recovery**: Graceful handling of file system and permission errors
-
-**High Availability Design:**
-def atomic_build():
-    backup_current_build()  # Preserve working state
-    try:
-        generate_new_build()  # Create complete new build
-        validate_build_output()  # Verify build integrity
-        activate_new_build()  # Atomic swap to new version
-    except Exception as e:
-        restore_from_backup()  # Rollback on any failure
-        raise BuildFailedException(f"Build failed: {e}")
-    finally:
-        cleanup_old_backups()  # Maintain backup retention
-```
-
-### Context: scalability-performance (from 05_Operational_Architecture.md)
-
-```markdown
-**Build Performance:**
-BUILD_PERFORMANCE_TARGETS = {
-    "100_posts": "< 5 seconds",
-    "1000_posts": "< 30 seconds",
-    "markdown_parsing": "< 100ms per file",
-    "template_rendering": "< 50ms per page",
-    "image_copying": "< 1GB per minute"
-}
-
-**Performance Monitoring:**
-- **Build Time Tracking**: Monitoring build duration and identifying bottlenecks
-- **API Response Times**: Dashboard endpoint performance measurement
-- **Resource Usage**: Memory and CPU utilization during build processes
+*   **Atomic Build**: A build process that either completes entirely or fails completely with automatic rollback, ensuring the system never exists in a partially-built state.
 ```
 
 ---

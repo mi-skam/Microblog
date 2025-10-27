@@ -1,0 +1,224 @@
+{% extends "dashboard/layout.html" %}
+
+{% block page_title %}Settings{% endblock %}
+
+{% block breadcrumb_items %}
+<li><a href="/dashboard/settings">Settings</a></li>
+{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+    <h2>Blog Settings</h2>
+
+    <!-- Placeholder Settings Form -->
+    <div class="settings-section">
+        <h3>General Settings</h3>
+        <form class="settings-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+            <div class="form-group">
+                <label for="site_title">Site Title</label>
+                <input type="text" id="site_title" name="site_title" value="Microblog" placeholder="Your blog title">
+            </div>
+
+            <div class="form-group">
+                <label for="site_description">Site Description</label>
+                <textarea id="site_description" name="site_description" rows="3"
+                          placeholder="A brief description of your blog">A minimal blog powered by FastAPI and HTMX</textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="posts_per_page">Posts Per Page</label>
+                <input type="number" id="posts_per_page" name="posts_per_page" value="10" min="1" max="50">
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn" disabled>Save Settings</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Build Settings -->
+    <div class="settings-section">
+        <h3>Build Settings</h3>
+        <div class="build-controls">
+            <p>Manage your static site generation and deployment.</p>
+            <div class="build-actions">
+                <button type="button" class="btn outline" disabled>Rebuild Site</button>
+                <button type="button" class="btn outline secondary" disabled>Clear Cache</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Information -->
+    <div class="settings-section">
+        <h3>System Information</h3>
+        <div class="system-info">
+            <div class="info-grid">
+                <div class="info-item">
+                    <label>Version</label>
+                    <span>1.0.0</span>
+                </div>
+                <div class="info-item">
+                    <label>Environment</label>
+                    <span>Development</span>
+                </div>
+                <div class="info-item">
+                    <label>Last Build</label>
+                    <span>Never</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Account Settings -->
+    <div class="settings-section">
+        <h3>Account Settings</h3>
+        <div class="account-controls">
+            <p>Manage your user account and security settings.</p>
+            <div class="account-actions">
+                <button type="button" class="btn outline" disabled>Change Password</button>
+                <button type="button" class="btn outline secondary" disabled>Export Data</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notice -->
+    <div class="settings-notice">
+        <p><strong>Note:</strong> This is a placeholder settings page. Full configuration management will be implemented in future updates.</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+/* Settings Container */
+.settings-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.settings-section {
+    background: var(--pico-card-background-color);
+    border: var(--pico-border-width) solid var(--pico-border-color);
+    border-radius: var(--pico-border-radius);
+    padding: 2rem;
+    margin-bottom: 2rem;
+}
+
+.settings-section h3 {
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--pico-border-color);
+    padding-bottom: 0.5rem;
+}
+
+/* Settings Form */
+.settings-form .form-group {
+    margin-bottom: 1.5rem;
+}
+
+.settings-form label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.settings-form input,
+.settings-form textarea {
+    width: 100%;
+}
+
+.form-actions {
+    border-top: 1px solid var(--pico-border-color);
+    padding-top: 1.5rem;
+    margin-top: 2rem;
+}
+
+/* Build Controls */
+.build-controls p {
+    margin-bottom: 1.5rem;
+    color: var(--pico-muted-color);
+}
+
+.build-actions,
+.account-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+/* System Information */
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.info-item {
+    padding: 1rem;
+    background: var(--pico-muted-background-color);
+    border-radius: var(--pico-border-radius);
+}
+
+.info-item label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    color: var(--pico-muted-color);
+    font-size: 0.875rem;
+}
+
+.info-item span {
+    font-weight: 500;
+    color: var(--pico-color);
+}
+
+/* Account Controls */
+.account-controls p {
+    margin-bottom: 1.5rem;
+    color: var(--pico-muted-color);
+}
+
+/* Settings Notice */
+.settings-notice {
+    background: var(--pico-primary-100);
+    border: 1px solid var(--pico-primary-300);
+    border-radius: var(--pico-border-radius);
+    padding: 1rem;
+    margin-top: 2rem;
+}
+
+.settings-notice p {
+    margin: 0;
+    color: var(--pico-primary-700);
+}
+
+/* Disabled States */
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .settings-section {
+        padding: 1rem;
+    }
+
+    .build-actions,
+    .account-actions {
+        flex-direction: column;
+    }
+
+    .build-actions button,
+    .account-actions button {
+        width: 100%;
+    }
+
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}

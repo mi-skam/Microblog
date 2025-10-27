@@ -1,0 +1,340 @@
+{% extends "dashboard/layout.html" %}
+
+{% block page_title %}{% if is_edit %}Edit Post{% else %}New Post{% endif %}{% endblock %}
+
+{% block breadcrumb_items %}
+<li><a href="/dashboard/posts">Posts</a></li>
+<li>{% if is_edit %}Edit{% else %}New{% endif %}</li>
+{% endblock %}
+
+{% block content %}
+<div class="post-editor">
+    <form method="post" action="{% if is_edit %}/api/posts/{{ post.computed_slug }}{% else %}/api/posts{% endif %}"
+          class="post-form" id="post-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% if is_edit %}
+        <input type="hidden" name="_method" value="PUT">
+        {% endif %}
+
+        <!-- Post Title -->
+        <div class="form-group">
+            <label for="title">Title *</label>
+            <input type="text"
+                   id="title"
+                   name="title"
+                   value="{% if is_edit %}{{ post.frontmatter.title }}{% endif %}"
+                   required
+                   placeholder="Enter post title">
+        </div>
+
+        <!-- Post Slug -->
+        <div class="form-group">
+            <label for="slug">Slug</label>
+            <input type="text"
+                   id="slug"
+                   name="slug"
+                   value="{% if is_edit %}{{ post.frontmatter.slug or '' }}{% endif %}"
+                   placeholder="Auto-generated from title">
+            <small>Leave blank to auto-generate from title</small>
+        </div>
+
+        <!-- Post Description -->
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description"
+                      name="description"
+                      rows="2"
+                      placeholder="Brief description for SEO and previews">{% if is_edit %}{{ post.frontmatter.description or '' }}{% endif %}</textarea>
+        </div>
+
+        <!-- Post Tags -->
+        <div class="form-group">
+            <label for="tags">Tags</label>
+            <input type="text"
+                   id="tags"
+                   name="tags"
+                   value="{% if is_edit and post.frontmatter.tags %}{{ post.frontmatter.tags | join(', ') }}{% endif %}"
+                   placeholder="Separate tags with commas">
+            <small>Separate multiple tags with commas</small>
+        </div>
+
+        <!-- Post Date -->
+        <div class="form-group">
+            <label for="date">Date</label>
+            <input type="date"
+                   id="date"
+                   name="date"
+                   value="{% if is_edit %}{{ post.frontmatter.date.isoformat() }}{% endif %}">
+        </div>
+
+        <!-- Draft Status -->
+        <div class="form-group">
+            <label>
+                <input type="checkbox"
+                       id="draft"
+                       name="draft"
+                       {% if is_edit and post.is_draft %}checked{% elif not is_edit %}checked{% endif %}>
+                Save as draft
+            </label>
+            <small>Drafts are not visible on the public site</small>
+        </div>
+
+        <!-- Post Content -->
+        <div class="form-group">
+            <label for="content">Content *</label>
+            <textarea id="content"
+                      name="content"
+                      rows="20"
+                      required
+                      placeholder="Write your post content in Markdown...">{% if is_edit %}{{ post.content }}{% endif %}</textarea>
+            <small>Supports Markdown formatting</small>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+            <a href="/dashboard/posts" class="btn outline secondary">Cancel</a>
+            <button type="submit" class="btn">
+                {% if is_edit %}Update Post{% else %}Create Post{% endif %}
+            </button>
+        </div>
+    </form>
+
+    <!-- Preview Panel (Optional Future Enhancement) -->
+    <div class="preview-panel" style="display: none;">
+        <h3>Preview</h3>
+        <div id="markdown-preview"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+/* Post Editor Layout */
+.post-editor {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.post-form {
+    background: var(--pico-card-background-color);
+    border: var(--pico-border-width) solid var(--pico-border-color);
+    border-radius: var(--pico-border-radius);
+    padding: 2rem;
+}
+
+/* Form Groups */
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--pico-color);
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    margin-bottom: 0.25rem;
+}
+
+.form-group small {
+    display: block;
+    color: var(--pico-muted-color);
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+/* Content Textarea */
+#content {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 300px;
+}
+
+/* Form Actions */
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    align-items: center;
+    border-top: 1px solid var(--pico-border-color);
+    padding-top: 1.5rem;
+    margin-top: 2rem;
+}
+
+.form-actions a,
+.form-actions button {
+    min-width: 120px;
+    text-align: center;
+    text-decoration: none;
+}
+
+/* Checkbox Styling */
+.form-group label:has(input[type="checkbox"]) {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: normal;
+    cursor: pointer;
+}
+
+.form-group input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+}
+
+/* Title Input Special Styling */
+#title {
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+/* Slug Input Special Styling */
+#slug {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .post-form {
+        padding: 1rem;
+    }
+
+    .form-actions {
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+
+    .form-actions a,
+    .form-actions button {
+        width: 100%;
+    }
+
+    #content {
+        min-height: 250px;
+    }
+}
+
+/* Focus States */
+.form-group input:focus,
+.form-group textarea:focus {
+    border-color: var(--pico-primary-500);
+    box-shadow: 0 0 0 2px var(--pico-primary-100);
+}
+
+/* Error States (for future validation) */
+.form-group.error input,
+.form-group.error textarea {
+    border-color: var(--pico-color-red-500);
+}
+
+.form-group.error small {
+    color: var(--pico-color-red-600);
+}
+
+/* Preview Panel (hidden by default) */
+.preview-panel {
+    background: var(--pico-card-background-color);
+    border: var(--pico-border-width) solid var(--pico-border-color);
+    border-radius: var(--pico-border-radius);
+    padding: 1.5rem;
+    margin-top: 2rem;
+}
+
+.preview-panel h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--pico-border-color);
+    padding-bottom: 0.5rem;
+}
+
+#markdown-preview {
+    min-height: 200px;
+    line-height: 1.6;
+}
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Auto-generate slug from title
+document.getElementById('title').addEventListener('input', function(e) {
+    const slugInput = document.getElementById('slug');
+
+    // Only auto-generate if slug field is empty
+    if (!slugInput.value.trim()) {
+        const title = e.target.value;
+        const slug = title
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        slugInput.value = slug;
+    }
+});
+
+// Form submission handling
+document.getElementById('post-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+    const method = formData.get('_method') || 'POST';
+    const url = this.action;
+
+    // Convert checkbox to boolean string
+    const draftCheckbox = document.getElementById('draft');
+    formData.set('draft', draftCheckbox.checked ? 'true' : 'false');
+
+    // Remove the _method field from form data since we'll use it in fetch options
+    formData.delete('_method');
+
+    // Show loading state
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = 'Saving...';
+    submitBtn.disabled = true;
+
+    fetch(url, {
+        method: method,
+        body: formData,
+        headers: {
+            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        }
+    })
+    .then(response => {
+        if (response.ok) {
+            // Redirect to posts list on success
+            window.location.href = '/dashboard/posts';
+        } else {
+            throw new Error('Failed to save post');
+        }
+    })
+    .catch(error => {
+        console.error('Error saving post:', error);
+        alert('Failed to save post. Please try again.');
+
+        // Restore button state
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+    });
+});
+
+// Handle Cancel button to prevent accidental navigation
+document.querySelector('.form-actions a').addEventListener('click', function(e) {
+    const form = document.getElementById('post-form');
+    const formData = new FormData(form);
+
+    // Check if form has been modified (simple check)
+    const hasContent = formData.get('title') || formData.get('content');
+
+    if (hasContent && !confirm('Are you sure you want to leave? Any unsaved changes will be lost.')) {
+        e.preventDefault();
+    }
+});
+</script>
+{% endblock %}

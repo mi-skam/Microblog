@@ -1,0 +1,494 @@
+{% extends "dashboard/layout.html" %}
+
+{% block page_title %}Posts{% endblock %}
+
+{% block breadcrumb_items %}
+<li><a href="/dashboard/posts">Posts</a></li>
+{% endblock %}
+
+{% block page_actions %}
+<div class="page-actions">
+    <a href="/dashboard/posts/new" class="btn" role="button">
+        <strong>+ New Post</strong>
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Error Display -->
+{% if error %}
+<div class="error-message" role="alert">
+    <p><strong>Error:</strong> {{ error }}</p>
+</div>
+{% endif %}
+
+<!-- Statistics Overview -->
+<div class="stats-grid" style="margin-bottom: 2rem;">
+    <div class="stats-card">
+        <h3>{{ stats.total_posts }}</h3>
+        <p>Total Posts</p>
+    </div>
+    <div class="stats-card">
+        <h3>{{ stats.published_posts }}</h3>
+        <p>Published</p>
+    </div>
+    <div class="stats-card">
+        <h3>{{ stats.draft_posts }}</h3>
+        <p>Drafts</p>
+    </div>
+</div>
+
+<!-- Posts Management Interface -->
+<div class="posts-container">
+    <!-- Filter/Search Controls -->
+    <div class="posts-controls" style="margin-bottom: 1.5rem;">
+        <div class="filter-controls">
+            <label for="status-filter">Filter by status:</label>
+            <select id="status-filter" onchange="filterPosts(this.value)">
+                <option value="all">All Posts</option>
+                <option value="published">Published Only</option>
+                <option value="draft">Drafts Only</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Posts Table -->
+    <div class="posts-table-container">
+        {% if all_posts %}
+        <table id="posts-table" role="table">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Status</th>
+                    <th>Date</th>
+                    <th>Tags</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for post in all_posts %}
+                <tr class="post-row {% if post.is_draft %}draft-post{% else %}published-post{% endif %}"
+                    data-status="{% if post.is_draft %}draft{% else %}published{% endif %}">
+                    <td>
+                        <div class="post-title">
+                            <strong>{{ post.frontmatter.title }}</strong>
+                            {% if post.frontmatter.description %}
+                            <small class="post-description">{{ post.frontmatter.description }}</small>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <span class="status-badge {% if post.is_draft %}status-draft{% else %}status-published{% endif %}">
+                            {% if post.is_draft %}Draft{% else %}Published{% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        <time datetime="{{ post.frontmatter.date.isoformat() }}">
+                            {{ post.frontmatter.date.strftime('%B %d, %Y') }}
+                        </time>
+                    </td>
+                    <td>
+                        {% if post.frontmatter.tags %}
+                        <div class="tags-list">
+                            {% for tag in post.frontmatter.tags[:3] %}
+                            <span class="tag">{{ tag }}</span>
+                            {% endfor %}
+                            {% if post.frontmatter.tags|length > 3 %}
+                            <span class="tag-more">+{{ post.frontmatter.tags|length - 3 }}</span>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <span class="no-tags">No tags</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="post-actions">
+                            <a href="/dashboard/posts/{{ post.computed_slug }}/edit"
+                               class="btn-small outline secondary"
+                               title="Edit post">
+                                Edit
+                            </a>
+
+                            {% if post.is_draft %}
+                            <button type="button"
+                                    class="btn-small outline"
+                                    onclick="publishPost('{{ post.computed_slug }}')"
+                                    title="Publish post">
+                                Publish
+                            </button>
+                            {% else %}
+                            <button type="button"
+                                    class="btn-small outline secondary"
+                                    onclick="unpublishPost('{{ post.computed_slug }}')"
+                                    title="Unpublish post">
+                                Unpublish
+                            </button>
+                            {% endif %}
+
+                            <button type="button"
+                                    class="btn-small outline secondary delete-btn"
+                                    onclick="deletePost('{{ post.computed_slug }}', '{{ post.frontmatter.title }}')"
+                                    title="Delete post">
+                                Delete
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <h3>No posts yet</h3>
+            <p>Get started by creating your first blog post.</p>
+            <a href="/dashboard/posts/new" class="btn">Create Your First Post</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<dialog id="delete-modal">
+    <article>
+        <header>
+            <button aria-label="Close" rel="prev" onclick="closeDeleteModal()"></button>
+            <h3>Confirm Delete</h3>
+        </header>
+        <main>
+            <p>Are you sure you want to delete the post "<strong id="delete-post-title"></strong>"?</p>
+            <p><small>This action cannot be undone.</small></p>
+        </main>
+        <footer>
+            <button class="secondary" onclick="closeDeleteModal()">Cancel</button>
+            <button class="delete-confirm-btn" onclick="confirmDelete()">Delete Post</button>
+        </footer>
+    </article>
+</dialog>
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+/* Statistics Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.stats-card {
+    background: var(--pico-card-background-color);
+    border: var(--pico-border-width) solid var(--pico-border-color);
+    border-radius: var(--pico-border-radius);
+    padding: 1rem;
+    text-align: center;
+}
+
+.stats-card h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--pico-primary-500);
+}
+
+.stats-card p {
+    margin: 0;
+    color: var(--pico-muted-color);
+    font-size: 0.875rem;
+}
+
+/* Posts Controls */
+.posts-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.filter-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.filter-controls label {
+    margin: 0;
+    font-weight: 500;
+}
+
+.filter-controls select {
+    min-width: 150px;
+}
+
+/* Posts Table */
+.posts-table-container {
+    overflow-x: auto;
+}
+
+#posts-table {
+    width: 100%;
+    margin: 0;
+}
+
+#posts-table th {
+    background: var(--pico-muted-background-color);
+    font-weight: 600;
+    text-align: left;
+    padding: 0.75rem;
+}
+
+#posts-table td {
+    padding: 0.75rem;
+    vertical-align: top;
+    border-bottom: 1px solid var(--pico-border-color);
+}
+
+/* Post Title Column */
+.post-title strong {
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.post-description {
+    color: var(--pico-muted-color);
+    display: block;
+    font-style: italic;
+}
+
+/* Status Badges */
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--pico-border-radius);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-published {
+    background: var(--pico-primary-100);
+    color: var(--pico-primary-700);
+}
+
+.status-draft {
+    background: var(--pico-secondary-100);
+    color: var(--pico-secondary-700);
+}
+
+/* Tags */
+.tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.tag {
+    display: inline-block;
+    padding: 0.125rem 0.375rem;
+    background: var(--pico-muted-background-color);
+    border-radius: var(--pico-border-radius);
+    font-size: 0.75rem;
+    color: var(--pico-muted-color);
+}
+
+.tag-more {
+    display: inline-block;
+    padding: 0.125rem 0.375rem;
+    background: var(--pico-primary-100);
+    border-radius: var(--pico-border-radius);
+    font-size: 0.75rem;
+    color: var(--pico-primary-700);
+    font-weight: 600;
+}
+
+.no-tags {
+    color: var(--pico-muted-color);
+    font-style: italic;
+    font-size: 0.875rem;
+}
+
+/* Post Actions */
+.post-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.btn-small {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    text-decoration: none;
+    border-radius: var(--pico-border-radius);
+    border: 1px solid var(--pico-border-color);
+    background: var(--pico-background-color);
+    color: var(--pico-color);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-small:hover {
+    background: var(--pico-secondary-hover-background-color);
+}
+
+.btn-small.outline {
+    background: transparent;
+    color: var(--pico-primary-500);
+    border-color: var(--pico-primary-500);
+}
+
+.btn-small.outline:hover {
+    background: var(--pico-primary-500);
+    color: var(--pico-primary-inverse);
+}
+
+.btn-small.outline.secondary {
+    color: var(--pico-secondary-500);
+    border-color: var(--pico-secondary-500);
+}
+
+.btn-small.outline.secondary:hover {
+    background: var(--pico-secondary-500);
+    color: var(--pico-secondary-inverse);
+}
+
+/* Page Actions */
+.page-actions a.btn {
+    text-decoration: none;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--pico-muted-color);
+}
+
+.empty-state h3 {
+    margin-bottom: 0.5rem;
+    color: var(--pico-color);
+}
+
+.empty-state p {
+    margin-bottom: 1.5rem;
+}
+
+/* Row States */
+.post-row.draft-post {
+    opacity: 0.8;
+}
+
+.post-row.hidden {
+    display: none;
+}
+
+/* Delete Modal */
+.delete-confirm-btn {
+    background: var(--pico-color-red-500);
+    border-color: var(--pico-color-red-500);
+}
+
+.delete-confirm-btn:hover {
+    background: var(--pico-color-red-600);
+    border-color: var(--pico-color-red-600);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    }
+
+    .posts-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .post-actions {
+        flex-direction: column;
+    }
+
+    .btn-small {
+        text-align: center;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Filter posts by status
+function filterPosts(status) {
+    const rows = document.querySelectorAll('.post-row');
+
+    rows.forEach(row => {
+        const postStatus = row.dataset.status;
+
+        if (status === 'all' || postStatus === status) {
+            row.classList.remove('hidden');
+        } else {
+            row.classList.add('hidden');
+        }
+    });
+}
+
+// Delete post confirmation
+let deletePostSlug = null;
+
+function deletePost(slug, title) {
+    deletePostSlug = slug;
+    document.getElementById('delete-post-title').textContent = title;
+    document.getElementById('delete-modal').showModal();
+}
+
+function closeDeleteModal() {
+    document.getElementById('delete-modal').close();
+    deletePostSlug = null;
+}
+
+function confirmDelete() {
+    if (deletePostSlug) {
+        // HTMX request to delete post
+        htmx.ajax('DELETE', `/api/posts/${deletePostSlug}`, {
+            headers: {
+                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            }
+        }).then(() => {
+            // Reload the page to refresh the posts list
+            window.location.reload();
+        }).catch(error => {
+            console.error('Error deleting post:', error);
+            alert('Failed to delete post. Please try again.');
+        });
+    }
+    closeDeleteModal();
+}
+
+// Publish/Unpublish post
+function publishPost(slug) {
+    htmx.ajax('POST', `/api/posts/${slug}/publish`, {
+        headers: {
+            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        }
+    }).then(() => {
+        window.location.reload();
+    }).catch(error => {
+        console.error('Error publishing post:', error);
+        alert('Failed to publish post. Please try again.');
+    });
+}
+
+function unpublishPost(slug) {
+    htmx.ajax('POST', `/api/posts/${slug}/unpublish`, {
+        headers: {
+            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        }
+    }).then(() => {
+        window.location.reload();
+    }).catch(error => {
+        console.error('Error unpublishing post:', error);
+        alert('Failed to unpublish post. Please try again.');
+    });
+}
+</script>
+{% endblock %}

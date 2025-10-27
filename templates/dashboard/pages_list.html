@@ -1,0 +1,140 @@
+{% extends "dashboard/layout.html" %}
+
+{% block page_title %}Pages{% endblock %}
+
+{% block breadcrumb_items %}
+<li><a href="/dashboard/pages">Pages</a></li>
+{% endblock %}
+
+{% block page_actions %}
+<div class="page-actions">
+    <button class="btn" disabled>
+        <strong>+ New Page</strong>
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="pages-container">
+    <!-- Placeholder for Static Pages Management -->
+    <div class="empty-state">
+        <h3>Static Pages</h3>
+        <p>Static page management will be available in a future update. This will allow you to create and manage standalone pages like "About", "Contact", etc.</p>
+
+        <!-- Preview of planned features -->
+        <div class="planned-features">
+            <h4>Planned Features:</h4>
+            <ul>
+                <li>Create and edit static pages</li>
+                <li>Custom page templates</li>
+                <li>Page navigation management</li>
+                <li>SEO settings per page</li>
+            </ul>
+        </div>
+
+        <div class="placeholder-actions">
+            <button class="btn outline" disabled>Create About Page</button>
+            <button class="btn outline" disabled>Create Contact Page</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+/* Pages Container */
+.pages-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 3rem 2rem;
+    background: var(--pico-card-background-color);
+    border: var(--pico-border-width) solid var(--pico-border-color);
+    border-radius: var(--pico-border-radius);
+}
+
+.empty-state h3 {
+    margin-bottom: 1rem;
+    color: var(--pico-color);
+}
+
+.empty-state > p {
+    margin-bottom: 2rem;
+    color: var(--pico-muted-color);
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Planned Features */
+.planned-features {
+    background: var(--pico-muted-background-color);
+    border-radius: var(--pico-border-radius);
+    padding: 1.5rem;
+    margin: 2rem auto;
+    max-width: 400px;
+    text-align: left;
+}
+
+.planned-features h4 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: var(--pico-color);
+    text-align: center;
+}
+
+.planned-features ul {
+    margin: 0;
+    padding-left: 1.5rem;
+}
+
+.planned-features li {
+    margin-bottom: 0.5rem;
+    color: var(--pico-muted-color);
+}
+
+/* Placeholder Actions */
+.placeholder-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 2rem;
+}
+
+.placeholder-actions button {
+    min-width: 140px;
+}
+
+/* Disabled Button Styling */
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.page-actions button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .empty-state {
+        padding: 2rem 1rem;
+    }
+
+    .placeholder-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .placeholder-actions button {
+        width: 100%;
+        max-width: 200px;
+    }
+}
+</style>
+{% endblock %}

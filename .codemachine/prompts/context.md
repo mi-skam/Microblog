@@ -10,17 +10,17 @@ This is the full specification of the task you must complete.
 
 ```json
 {
-  "task_id": "I4.T7",
+  "task_id": "I4.T8",
   "iteration_id": "I4",
   "iteration_goal": "Implement FastAPI web application with HTMX-enhanced dashboard for content management, authentication UI, and basic CRUD operations",
-  "description": "Add CLI serve command to start development and production servers with proper configuration, hot-reload support, and graceful shutdown handling.",
-  "agent_type_hint": "BackendAgent",
-  "inputs": "CLI framework, server configuration, development vs production modes",
-  "target_files": ["microblog/cli.py"],
-  "input_files": ["microblog/cli.py", "microblog/server/app.py"],
-  "deliverables": "CLI serve command, development mode, production configuration, server management",
-  "acceptance_criteria": "`microblog serve` starts server correctly, development mode has hot-reload, production mode is secure, graceful shutdown works",
-  "dependencies": ["I4.T2"],
+  "description": "Create integration tests for dashboard functionality including authentication flows, post management operations, and form submissions. Test complete user workflows.",
+  "agent_type_hint": "TestingAgent",
+  "inputs": "Dashboard implementation, user workflow requirements, integration testing patterns",
+  "target_files": ["tests/integration/test_dashboard.py", "tests/integration/test_auth_flows.py"],
+  "input_files": ["microblog/server/app.py", "microblog/server/routes/dashboard.py", "tests/conftest.py"],
+  "deliverables": "Integration test suite for dashboard functionality and user workflows",
+  "acceptance_criteria": "All dashboard routes tested, authentication flows verified, form submissions tested, user workflows covered, test coverage >80%",
+  "dependencies": ["I4.T6", "I4.T7"],
   "parallelizable": true,
   "done": false
 }
@@ -32,91 +32,145 @@ This is the full specification of the task you must complete.
 
 The following are the relevant sections from the architecture and plan documents, which I found by analyzing the task description.
 
-### Context: core-architecture (from 01_Plan_Overview_and_Setup.md)
+### Context: authentication-authorization (from 05_Operational_Architecture.md)
 
 ```markdown
-## 2. Core Architecture
+**Authentication & Authorization:**
 
-*   **Architectural Style:** Hybrid Static-First Architecture with Layered Monolith for Management
-*   **Technology Stack:**
-    *   Frontend: HTMX 1.9+ (vendored), Pico.css (<10KB), Vanilla JavaScript (minimal)
-    *   Backend: FastAPI 0.100+, Python 3.10+, Uvicorn ASGI server
-    *   Database: SQLite3 (Python stdlib) for single user authentication
-    *   Template Engine: Jinja2 for HTML generation and dashboard rendering
-    *   Markdown: python-markdown + pymdown-extensions for content processing
-    *   Authentication: python-jose + passlib[bcrypt] for JWT and password hashing
-    *   CLI: Click for command-line interface and management tools
-    *   File Watching: watchfiles for development mode configuration hot-reload
-    *   Deployment: Docker-ready, systemd service, nginx/Caddy reverse proxy support
-*   **Key Components/Services:**
-    *   **Authentication Service**: JWT-based single-user authentication with bcrypt password hashing
-    *   **Content Management Service**: CRUD operations for posts with markdown processing and validation
-    *   **Static Site Generator**: Template rendering and asset copying with atomic build process
-    *   **Dashboard Web Application**: HTMX-enhanced interface for content management and live preview
-    *   **Image Management Service**: Upload, validation, and organization of media files
-    *   **Build Management Service**: Orchestrates site generation with backup and rollback capabilities
-    *   **CLI Interface**: Commands for build, serve, user creation, and system management
-    *   **Configuration Manager**: YAML-based settings with validation and hot-reload support
-    *   *(Component Diagram planned - see Iteration 1.T2)*
+**Authentication Strategy:**
+- **Single-User Design**: System supports exactly one admin user with fixed role
+- **JWT-Based Sessions**: Stateless authentication using JSON Web Tokens
+- **Secure Token Storage**: JWT stored in httpOnly, Secure, SameSite=Strict cookies
+- **Password Security**: Bcrypt hashing with cost factor ≥12 for password storage
+- **Session Management**: Configurable token expiration (default 2 hours)
+
+**Implementation Details:**
+```python
+# Authentication flow
+def authenticate_user(username: str, password: str) -> Optional[User]:
+    user = get_user_by_username(username)
+    if user and verify_password(password, user.password_hash):
+        token = create_jwt_token(user.user_id, user.username)
+        return user, token
+    return None
+
+# JWT Token Structure
+{
+    "user_id": 1,
+    "username": "admin",
+    "role": "admin",
+    "exp": 1635724800,  # Expiration timestamp
+    "iat": 1635721200   # Issued at timestamp
+}
 ```
 
-### Context: task-i4-t7 (from 02_Iteration_I4.md)
+**Authorization Model:**
+- **Role-Based**: Single admin role with full system access
+- **Route Protection**: Middleware validates JWT for protected endpoints
+- **CSRF Protection**: All state-changing operations require valid CSRF tokens
+- **Session Validation**: Automatic token expiration and renewal handling
+```
+
+### Context: key-interaction-flow (from 04_Behavior_and_Communication.md)
 
 ```markdown
-*   **Task 4.7:**
-    *   **Task ID:** `I4.T7`
-    *   **Description:** Add CLI serve command to start development and production servers with proper configuration, hot-reload support, and graceful shutdown handling.
-    *   **Agent Type Hint:** `BackendAgent`
-    *   **Inputs:** CLI framework, server configuration, development vs production modes
-    *   **Input Files:** ["microblog/cli.py", "microblog/server/app.py"]
-    *   **Target Files:** ["microblog/cli.py"]
-    *   **Deliverables:** CLI serve command, development mode, production configuration, server management
-    *   **Acceptance Criteria:** `microblog serve` starts server correctly, development mode has hot-reload, production mode is secure, graceful shutdown works
-    *   **Dependencies:** `I4.T2`
+**Key Interaction Flow (Sequence Diagram):**
+
+**Description:** This diagram illustrates the complete workflow for user authentication and post creation, showing the interaction between the web browser, dashboard application, authentication system, and content storage.
+
+**Diagram (PlantUML):**
+```plantuml
+@startuml
+actor "Content Author" as author
+participant "Web Browser" as browser
+participant "Dashboard App" as dashboard
+participant "Auth Middleware" as auth
+participant "Post Service" as posts
+participant "Content Storage" as storage
+participant "Static Generator" as generator
+participant "Build Output" as build
+
+== Authentication Flow ==
+author -> browser : Enter credentials and login
+browser -> dashboard : POST /auth/login (username, password)
+dashboard -> auth : Validate credentials
+auth -> dashboard : JWT token
+dashboard -> browser : Set httpOnly cookie + redirect
+browser -> author : Show dashboard interface
+
+== Post Creation Flow ==
+author -> browser : Click "New Post"
+browser -> dashboard : GET /dashboard/posts/new
+dashboard -> browser : HTML form with CSRF token
+author -> browser : Fill form (title, content, tags)
+browser -> dashboard : POST /api/posts (HTMX request)
+
+dashboard -> auth : Validate JWT from cookie
+auth -> dashboard : User authenticated
+
+dashboard -> posts : Create post with metadata
+posts -> storage : Write markdown file
+storage -> posts : File created successfully
+posts -> dashboard : Post created
+
+dashboard -> generator : Trigger build process
+generator -> storage : Read all content files
+storage -> generator : Content data
+generator -> build : Generate static HTML
+build -> generator : Build completed
+generator -> dashboard : Build status
+
+dashboard -> browser : HTML fragment with success message
+browser -> author : Show updated post list + success
+
+== Live Preview Flow ==
+author -> browser : Type in markdown editor
+note right : 500ms debounce
+browser -> dashboard : POST /api/preview (HTMX)
+```
+
+### Context: task-i4-t8 (from 02_Iteration_I4.md)
+
+```markdown
+*   **Task 4.8:**
+    *   **Task ID:** `I4.T8`
+    *   **Description:** Create integration tests for dashboard functionality including authentication flows, post management operations, and form submissions. Test complete user workflows.
+    *   **Agent Type Hint:** `TestingAgent`
+    *   **Inputs:** Dashboard implementation, user workflow requirements, integration testing patterns
+    *   **Input Files:** ["microblog/server/app.py", "microblog/server/routes/dashboard.py", "tests/conftest.py"]
+    *   **Target Files:** ["tests/integration/test_dashboard.py", "tests/integration/test_auth_flows.py"]
+    *   **Deliverables:** Integration test suite for dashboard functionality and user workflows
+    *   **Acceptance Criteria:** All dashboard routes tested, authentication flows verified, form submissions tested, user workflows covered, test coverage >80%
+    *   **Dependencies:** `I4.T6`, `I4.T7`
     *   **Parallelizable:** Yes
 ```
 
-### Context: deployment-strategy (from 05_Operational_Architecture.md)
+### Context: verification-and-integration-strategy (from 03_Verification_and_Glossary.md)
 
 ```markdown
-**Deployment Strategy:**
+## 5. Verification and Integration Strategy
 
-**Option 1: Full Stack Deployment (Recommended for Dynamic Management)**
-```
-Internet → nginx/Caddy (443) → FastAPI Dashboard (8000)
-                           ↓
-                    Static Files (build/)
-```
+*   **Testing Levels:**
+    *   **Unit Testing**: Individual component testing with pytest, focusing on business logic, authentication, content processing, and build system components. Target coverage >85% for all modules with comprehensive edge case testing.
+    *   **Integration Testing**: API endpoint testing, database interactions, file system operations, and service integration testing. Verify authentication flows, content management workflows, and build system integration.
+    *   **End-to-End Testing**: Complete user workflow testing including authentication, post creation, editing, publishing, and build processes. Test HTMX interactions, form submissions, and dashboard functionality.
+    *   **Performance Testing**: Build time validation (<5s for 100 posts, <30s for 1000 posts), API response time verification (<200ms), and load testing for concurrent dashboard users.
+    *   **Security Testing**: Authentication security, CSRF protection, input validation, file upload security, and SQL injection prevention testing.
 
-**Option 2: Hybrid Deployment (Recommended for Performance)**
-```
-Local: MicroBlog Dashboard (development/management)
-   ↓ (build + rsync/deploy)
-Remote: Static File Server (production/public)
-```
+*   **CI/CD:**
+    *   **Automated Testing**: All tests run on every commit with GitHub Actions or similar CI system
+    *   **Code Quality Gates**: Ruff linting, type checking with mypy, security scanning with bandit
+    *   **Build Validation**: Automated build testing with sample content, template rendering verification
+    *   **Artifact Validation**: OpenAPI specification validation, PlantUML diagram syntax checking, configuration schema validation
+    *   **Deployment Testing**: Docker image building, deployment script validation, service configuration testing
 
-**Option 3: Container Deployment**
-```dockerfile
-FROM python:3.12-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-COPY . .
-EXPOSE 8000
-CMD ["microblog", "serve", "--host", "0.0.0.0"]
-```
-```
-
-### Context: target-environment (from 05_Operational_Architecture.md)
-
-```markdown
-**Target Environment:**
-
-**Primary Deployment Options:**
-1. **Development Environment**: Local workstation with hot-reload capabilities
-2. **Self-Hosted VPS**: Linux server with manual deployment and management
-3. **Hybrid Deployment**: Local dashboard with static output deployed to CDN
-4. **Container Deployment**: Docker-based deployment for consistency
+*   **Code Quality Gates:**
+    *   **Linting Success**: All code must pass Ruff linting with zero errors and warnings
+    *   **Type Coverage**: Minimum 90% type hint coverage with mypy validation
+    *   **Test Coverage**: Minimum 85% code coverage across all modules
+    *   **Security Scan**: Zero high-severity security vulnerabilities detected by bandit
+    *   **Performance Benchmarks**: All performance targets met in automated testing
+    *   **Documentation Coverage**: All public APIs and configuration options documented
 ```
 
 ---
@@ -126,26 +180,37 @@ CMD ["microblog", "serve", "--host", "0.0.0.0"]
 The following analysis is based on my direct review of the current codebase. Use these notes and tips to guide your implementation.
 
 ### Relevant Existing Code
-*   **File:** `microblog/cli.py`
-    *   **Summary:** This file contains the main Click-based CLI framework with commands for build, create-user, init, and status. The serve command exists but is currently a placeholder (lines 207-240).
-    *   **Recommendation:** You MUST replace the placeholder serve command implementation starting at line 207. The current implementation only prints acknowledgment messages and needs to be replaced with actual uvicorn server startup logic.
 
 *   **File:** `microblog/server/app.py`
-    *   **Summary:** This file contains the FastAPI application factory with create_app(), get_app(), and get_dev_app() functions. It includes proper middleware configuration, startup/shutdown events, and hot-reload support for development mode.
-    *   **Recommendation:** You MUST import and use the get_app() and get_dev_app() functions from this file. These functions return properly configured FastAPI applications for production and development respectively.
+    *   **Summary:** This file contains the FastAPI application factory with complete middleware configuration, route registration, and security setup. It includes authentication middleware, CSRF protection, security headers, and health check endpoints.
+    *   **Recommendation:** You MUST use the `create_app()` factory function for testing. Import this function to create isolated test instances with `dev_mode=True` for testing purposes.
 
-*   **File:** `microblog/server/config.py`
-    *   **Summary:** This file contains the ConfigManager class with hot-reload support and ServerConfig model that defines host, port, and hot_reload settings.
-    *   **Recommendation:** You SHOULD use the get_config_manager() function to access server configuration settings like host and port. The configuration manager already supports hot-reload in development mode.
+*   **File:** `microblog/server/routes/dashboard.py`
+    *   **Summary:** This file implements all dashboard routes including home page, posts listing, post creation/editing, and API endpoints for CRUD operations. It handles authentication checks, CSRF validation, and form processing.
+    *   **Recommendation:** You MUST test all routes defined in this file: `/dashboard/`, `/dashboard/posts`, `/dashboard/posts/new`, `/dashboard/posts/{slug}/edit`, `/dashboard/settings`, and the API endpoints `/api/posts`.
 
-*   **File:** `pyproject.toml`
-    *   **Summary:** This file shows that uvicorn[standard]>=0.23.0 is already included as a dependency, so uvicorn is available for the server implementation.
-    *   **Recommendation:** You MUST use uvicorn.run() to start the server. Do not add additional dependencies as uvicorn is already available.
+*   **File:** `microblog/server/routes/auth.py`
+    *   **Summary:** This file implements authentication routes including login, logout, session check, and both HTML and API endpoints. It handles JWT cookie management, CSRF validation, and secure session handling.
+    *   **Recommendation:** You MUST test the complete authentication flow: login page display, login form submission, JWT cookie setting, logout functionality, and session validation endpoints.
+
+*   **File:** `tests/conftest.py`
+    *   **Summary:** This file provides shared test fixtures including temporary config files, valid/invalid configuration data, and mock utilities for testing.
+    *   **Recommendation:** You SHOULD extend these fixtures with FastAPI test client fixtures, authenticated user fixtures, and database setup/teardown fixtures for integration testing.
 
 ### Implementation Tips & Notes
-*   **Tip:** The serve command should support both development and production modes. Use the --reload flag to enable development mode with hot-reload, and ensure production mode runs without debug features.
-*   **Note:** The existing app.py file already has proper startup/shutdown event handlers and configuration hot-reload support for development mode. You just need to wire up the uvicorn server to use these applications.
-*   **Warning:** The CLI command currently has placeholder TODO comments at lines 231-239. You need to completely replace this implementation with actual uvicorn server startup code.
-*   **Tip:** Use uvicorn's built-in graceful shutdown handling by setting up proper signal handlers. Consider using uvicorn.run() with proper host/port configuration from the config manager.
-*   **Note:** The config system already supports server.host and server.port settings, so you should read these from configuration and allow CLI options to override them.
-*   **Important:** Follow the existing CLI pattern in the build command which uses verbose output, configuration overrides, and proper error handling with colored output using click.style().
+
+*   **Tip:** I found a comprehensive integration test example in `tests/integration/test_build_process.py` that shows how to create realistic project structures and mock complex dependencies. You SHOULD follow similar patterns for dashboard testing.
+
+*   **Note:** The authentication system uses JWT tokens stored in httpOnly cookies with CSRF protection. Your tests MUST verify that cookies are set correctly, CSRF tokens are validated, and protected routes require authentication.
+
+*   **Warning:** The dashboard routes extensively use the `get_current_user()` and `get_csrf_token()` functions from middleware. You MUST ensure your test fixtures properly mock or set up authentication state for testing protected routes.
+
+*   **Tip:** The post management system uses the `get_post_service()` function and handles `PostValidationError`, `PostNotFoundError`, and `PostFileError` exceptions. Your tests SHOULD verify proper error handling for all these scenarios.
+
+*   **Note:** The application factory pattern uses configuration management and middleware layering. You SHOULD create separate test instances with controlled configuration to avoid test interference.
+
+*   **Warning:** The dashboard includes both HTML form endpoints and API endpoints for post management. You MUST test both types of endpoints and verify that form submissions work correctly with CSRF protection.
+
+*   **Tip:** The existing integration test fixtures show how to create temporary directories and realistic project structures. You SHOULD reuse these patterns for setting up test content and database files.
+
+*   **Note:** The authentication routes include both regular form-based endpoints and API endpoints for JSON responses. Your tests MUST cover both interaction patterns and verify proper response formats.

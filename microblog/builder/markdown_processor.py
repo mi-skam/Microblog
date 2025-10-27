@@ -49,6 +49,7 @@ class MarkdownProcessor:
             'markdown.extensions.fenced_code',
             'markdown.extensions.tables',
             'markdown.extensions.toc',
+            'markdown.extensions.codehilite',
             'pymdownx.superfences',
             'pymdownx.highlight',
             'pymdownx.inlinehilite',
@@ -58,6 +59,7 @@ class MarkdownProcessor:
             'pymdownx.mark',
             'pymdownx.tilde',
             'pymdownx.smartsymbols',
+            'pymdownx.tasklist',
         ]
 
         extension_configs = {
@@ -65,13 +67,24 @@ class MarkdownProcessor:
                 'css_class': 'highlight',
                 'guess_lang': True,
                 'use_pygments': True,
+                'linenums': False,
             },
             'pymdownx.superfences': {
                 'css_class': 'highlight',
             },
+            'pymdownx.tasklist': {
+                'custom_checkbox': True,
+            },
+            'markdown.extensions.codehilite': {
+                'css_class': 'highlight',
+                'use_pygments': True,
+                'guess_lang': True,
+                'linenums': False,
+            },
             'markdown.extensions.toc': {
                 'permalink': True,
                 'baselevel': 2,
+                'permalink_title': 'Link to this heading',
             },
             'markdown.extensions.fenced_code': {
                 'lang_prefix': 'language-',
@@ -255,6 +268,58 @@ class MarkdownProcessor:
         if hasattr(self.markdown_instance, 'toc_tokens'):
             return self.markdown_instance.toc_tokens
         return []
+
+    def validate_content_structure(self, content: str) -> list[str]:
+        """
+        Validate markdown content structure and return warnings.
+
+        Args:
+            content: Raw markdown content
+
+        Returns:
+            List of validation warning messages
+        """
+        warnings = []
+
+        try:
+            if not content.strip():
+                warnings.append("Content is empty")
+                return warnings
+
+            lines = content.split('\n')
+
+            # Check for basic markdown structure
+            has_headers = any(line.strip().startswith('#') for line in lines)
+            if not has_headers and len(content) > 500:
+                warnings.append("Long content without headers may be hard to navigate")
+
+            # Check for unclosed code blocks
+            fenced_blocks = content.count('```')
+            if fenced_blocks % 2 != 0:
+                warnings.append("Unclosed fenced code block detected")
+
+            # Check for very long lines that might affect readability
+            long_lines = [i+1 for i, line in enumerate(lines) if len(line) > 120]
+            if long_lines:
+                warnings.append(f"Very long lines detected (lines: {', '.join(map(str, long_lines[:5]))}{'...' if len(long_lines) > 5 else ''})")
+
+            # Check for malformed links
+            link_pattern = r'\[([^\]]*)\]\(([^)]*)\)'
+            for i, line in enumerate(lines, 1):
+                matches = re.findall(link_pattern, line)
+                for text, url in matches:
+                    if not url.strip():
+                        warnings.append(f"Empty link URL on line {i}")
+                    elif not text.strip():
+                        warnings.append(f"Empty link text on line {i}")
+
+            logger.debug(f"Content validation found {len(warnings)} warnings")
+
+        except Exception as e:
+            warnings.append(f"Error during content validation: {e}")
+            logger.error(f"Content validation error: {e}")
+
+        return warnings
 
 
 # Global markdown processor instance

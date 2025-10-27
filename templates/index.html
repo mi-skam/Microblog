@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}{{ site.title }}{% if site.description %} - {{ site.description }}{% endif %}{% endblock %}
+
+{% block content %}
+{% if posts %}
+    <div class="posts">
+        {% for post in posts %}
+        <article class="post-summary">
+            <h2 class="post-title">
+                <a href="/{{ post.computed_slug }}.html">{{ post.frontmatter.title }}</a>
+            </h2>
+
+            <div class="post-meta">
+                <time datetime="{{ post.frontmatter.date.isoformat() }}">
+                    {{ post.frontmatter.date | dateformat }}
+                </time>
+                {% if post.frontmatter.tags %}
+                <span class="post-tags">
+                    {% for tag in post.frontmatter.tags %}
+                    <a href="/tag/{{ tag.lower() }}.html" class="tag">#{{ tag }}</a>
+                    {% endfor %}
+                </span>
+                {% endif %}
+            </div>
+
+            {% if post.frontmatter.description %}
+            <div class="post-excerpt">
+                {{ post.frontmatter.description }}
+            </div>
+            {% else %}
+            <div class="post-excerpt">
+                {{ post.content | excerpt(200) }}
+            </div>
+            {% endif %}
+
+            <a href="/{{ post.computed_slug }}.html" class="read-more">Read more →</a>
+        </article>
+        {% endfor %}
+    </div>
+
+    {% if posts|length == build.posts_per_page %}
+    <div class="pagination">
+        {% if page > 1 %}
+        <a href="{% if page == 2 %}/{% else %}/page/{{ page - 1 }}.html{% endif %}" class="prev">← Newer Posts</a>
+        {% endif %}
+        <span class="current">Page {{ page }}</span>
+        <a href="/page/{{ page + 1 }}.html" class="next">Older Posts →</a>
+    </div>
+    {% endif %}
+{% else %}
+    <div class="no-posts">
+        <h2>Welcome to {{ site.title }}</h2>
+        <p>No posts have been published yet. Check back soon for new content!</p>
+    </div>
+{% endif %}
+{% endblock %}
+
+{% block extra_meta %}
+<meta property="og:title" content="{{ site.title }}">
+<meta property="og:description" content="{{ site.description }}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{ site.url }}">
+{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    .posts {
+        margin-bottom: 2rem;
+    }
+
+    .post-summary {
+        margin-bottom: 3rem;
+        padding-bottom: 2rem;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .post-summary:last-child {
+        border-bottom: none;
+    }
+
+    .post-title {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.5rem;
+    }
+
+    .post-title a {
+        text-decoration: none;
+        color: #333;
+    }
+
+    .post-title a:hover {
+        color: #666;
+    }
+
+    .post-meta {
+        color: #666;
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .post-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+
+    .post-excerpt {
+        color: #666;
+        margin: 1rem 0;
+        line-height: 1.6;
+    }
+
+    .read-more {
+        color: #666;
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .read-more:hover {
+        color: #333;
+        text-decoration: underline;
+    }
+
+    .no-posts {
+        text-align: center;
+        padding: 4rem 0;
+        color: #666;
+    }
+
+    .no-posts h2 {
+        color: #333;
+        margin-bottom: 1rem;
+    }
+
+    .pagination {
+        text-align: center;
+        margin: 3rem 0;
+        padding: 2rem 0;
+        border-top: 1px solid #f0f0f0;
+    }
+
+    .pagination a {
+        display: inline-block;
+        margin: 0 1rem;
+        padding: 0.5rem 1rem;
+        text-decoration: none;
+        color: #666;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+    }
+
+    .pagination a:hover {
+        background: #f8f8f8;
+        border-color: #999;
+        color: #333;
+    }
+
+    .pagination .current {
+        display: inline-block;
+        margin: 0 1rem;
+        padding: 0.5rem 1rem;
+        color: #333;
+        font-weight: bold;
+    }
+
+    @media (max-width: 600px) {
+        .post-meta {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+
+        .pagination a {
+            display: block;
+            margin: 0.5rem 0;
+        }
+    }
+</style>
+{% endblock %}

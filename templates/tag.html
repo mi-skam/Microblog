@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+
+{% block title %}Posts tagged "{{ tag }}" - {{ site.title }}{% endblock %}
+
+{% block description %}All blog posts tagged with "{{ tag }}" from {{ site.title }}{% endblock %}
+
+{% block content %}
+<div class="tag-page">
+    <header class="tag-header">
+        <h1>
+            Posts tagged
+            <span class="tag-name">"{{ tag }}"</span>
+        </h1>
+        <p class="tag-description">
+            {% if posts %}
+            {{ posts|length }} post{% if posts|length != 1 %}s{% endif %} found
+            {% else %}
+            No posts found with this tag
+            {% endif %}
+        </p>
+    </header>
+
+    {% if posts %}
+    <div class="tag-posts">
+        {% for post in posts %}
+        <article class="tag-post">
+            <h2 class="post-title">
+                <a href="/{{ post.computed_slug }}.html">{{ post.frontmatter.title }}</a>
+            </h2>
+
+            <div class="post-meta">
+                <time datetime="{{ post.frontmatter.date.isoformat() }}" class="post-date">
+                    {{ post.frontmatter.date | dateformat }}
+                </time>
+
+                {% if post.frontmatter.tags and post.frontmatter.tags|length > 1 %}
+                <div class="other-tags">
+                    <span class="tags-label">Other tags:</span>
+                    {% for post_tag in post.frontmatter.tags %}
+                    {% if post_tag.lower() != tag.lower() %}
+                    <a href="/tag/{{ post_tag.lower() }}.html" class="tag">#{{ post_tag }}</a>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            {% if post.frontmatter.description %}
+            <div class="post-excerpt">
+                {{ post.frontmatter.description }}
+            </div>
+            {% else %}
+            <div class="post-excerpt">
+                {{ post.content | excerpt(200) }}
+            </div>
+            {% endif %}
+
+            <a href="/{{ post.computed_slug }}.html" class="read-more">Read full post →</a>
+        </article>
+        {% endfor %}
+    </div>
+
+    <div class="tag-footer">
+        <div class="tag-nav">
+            <a href="/" class="back-to-home">← Back to Home</a>
+            <a href="/archive.html" class="view-archive">View All Posts</a>
+        </div>
+    </div>
+    {% else %}
+    <div class="no-posts">
+        <p>No posts have been tagged with "{{ tag }}" yet.</p>
+        <div class="tag-nav">
+            <a href="/" class="back-to-home">← Back to Home</a>
+            <a href="/archive.html" class="view-archive">Browse All Posts</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_meta %}
+<meta property="og:title" content="Posts tagged &quot;{{ tag }}&quot; - {{ site.title }}">
+<meta property="og:description" content="All blog posts tagged with &quot;{{ tag }}&quot; from {{ site.title }}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{ site.url }}/tag/{{ tag.lower() }}.html">
+<meta name="keywords" content="{{ tag }}, {{ site.title }}, blog">
+{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    .tag-page {
+        max-width: 100%;
+    }
+
+    .tag-header {
+        margin-bottom: 3rem;
+        text-align: center;
+        padding-bottom: 2rem;
+        border-bottom: 2px solid #f0f0f0;
+    }
+
+    .tag-header h1 {
+        font-size: 2.2rem;
+        margin: 0 0 1rem 0;
+        color: #333;
+        line-height: 1.3;
+    }
+
+    .tag-name {
+        color: #666;
+        background: #f0f0f0;
+        padding: 0.2rem 0.6rem;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 0.9em;
+    }
+
+    .tag-description {
+        color: #666;
+        font-size: 1.1rem;
+        margin: 0;
+    }
+
+    .tag-posts {
+        display: flex;
+        flex-direction: column;
+        gap: 2.5rem;
+        margin-bottom: 3rem;
+    }
+
+    .tag-post {
+        padding: 2rem;
+        border: 1px solid #f0f0f0;
+        border-radius: 8px;
+        background: #fafafa;
+        transition: all 0.3s ease;
+    }
+
+    .tag-post:hover {
+        background: #f5f5f5;
+        border-color: #e0e0e0;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .tag-post .post-title {
+        margin: 0 0 1rem 0;
+        font-size: 1.5rem;
+    }
+
+    .tag-post .post-title a {
+        text-decoration: none;
+        color: #333;
+        transition: color 0.2s ease;
+    }
+
+    .tag-post .post-title a:hover {
+        color: #666;
+    }
+
+    .tag-post .post-meta {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        margin-bottom: 1rem;
+        color: #666;
+        font-size: 0.9rem;
+        flex-wrap: wrap;
+    }
+
+    .tag-post .post-date {
+        font-weight: 500;
+        color: #555;
+    }
+
+    .tag-post .other-tags {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .tag-post .tags-label {
+        color: #888;
+        font-size: 0.85rem;
+    }
+
+    .tag-post .post-excerpt {
+        color: #666;
+        line-height: 1.6;
+        margin: 1rem 0;
+        font-size: 1rem;
+    }
+
+    .tag-post .read-more {
+        display: inline-block;
+        color: #666;
+        text-decoration: none;
+        font-weight: 500;
+        padding: 0.5rem 1rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+        margin-top: 0.5rem;
+    }
+
+    .tag-post .read-more:hover {
+        background: #f8f8f8;
+        border-color: #999;
+        color: #333;
+        text-decoration: none;
+    }
+
+    .tag-footer {
+        border-top: 1px solid #f0f0f0;
+        padding-top: 2rem;
+        margin-top: 3rem;
+    }
+
+    .tag-nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .tag-nav a {
+        text-decoration: none;
+        color: #666;
+        font-weight: 500;
+        padding: 0.75rem 1.5rem;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+    }
+
+    .tag-nav a:hover {
+        background: #f8f8f8;
+        border-color: #999;
+        color: #333;
+    }
+
+    .no-posts {
+        text-align: center;
+        padding: 4rem 0;
+        color: #666;
+    }
+
+    .no-posts p {
+        font-size: 1.2rem;
+        margin-bottom: 2rem;
+        color: #888;
+    }
+
+    .no-posts .tag-nav {
+        justify-content: center;
+    }
+
+    /* Highlight the current tag differently */
+    .tag-post .tag:not(:hover) {
+        background: #e8e8e8;
+        color: #555;
+    }
+
+    .tag-post .tag:hover {
+        background: #d0d0d0;
+        color: #333;
+    }
+
+    @media (max-width: 600px) {
+        .tag-header h1 {
+            font-size: 1.8rem;
+        }
+
+        .tag-name {
+            display: block;
+            margin-top: 0.5rem;
+        }
+
+        .tag-post {
+            padding: 1.5rem;
+        }
+
+        .tag-post .post-title {
+            font-size: 1.3rem;
+        }
+
+        .tag-post .post-meta {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .tag-nav {
+            flex-direction: column;
+            text-align: center;
+        }
+
+        .tag-nav a {
+            width: 100%;
+            text-align: center;
+        }
+
+        .no-posts .tag-nav {
+            flex-direction: column;
+        }
+    }
+
+    /* Special styling for empty other-tags */
+    .other-tags:empty {
+        display: none;
+    }
+</style>
+{% endblock %}

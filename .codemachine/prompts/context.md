@@ -10,17 +10,17 @@ This is the full specification of the task you must complete.
 
 ```json
 {
-  "task_id": "I3.T2",
+  "task_id": "I3.T3",
   "iteration_id": "I3",
   "iteration_goal": "Implement core static site generator with template rendering, markdown processing, and atomic build system with backup/rollback",
-  "description": "Implement markdown processor with python-markdown and pymdown-extensions. Support YAML frontmatter parsing, syntax highlighting, and content validation.",
+  "description": "Create Jinja2 template rendering system with base templates for homepage, post pages, archive, tags, and RSS feed. Implement template inheritance and context management.",
   "agent_type_hint": "BackendAgent",
-  "inputs": "Markdown processing requirements, frontmatter specification, content validation rules",
-  "target_files": ["microblog/builder/markdown_processor.py"],
-  "input_files": ["microblog/content/post_service.py"],
-  "deliverables": "Markdown processing engine with frontmatter support, syntax highlighting, content validation",
-  "acceptance_criteria": "Markdown renders to HTML correctly, YAML frontmatter extracts properly, syntax highlighting works, content validation catches errors",
-  "dependencies": ["I2.T4"],
+  "inputs": "Template requirements, site structure, Jinja2 best practices",
+  "target_files": ["microblog/builder/template_renderer.py", "templates/index.html", "templates/post.html", "templates/archive.html", "templates/tag.html", "templates/rss.xml"],
+  "input_files": ["templates/base.html", "microblog/server/config.py"],
+  "deliverables": "Template rendering engine, complete template set, context management, RSS feed generation",
+  "acceptance_criteria": "Templates render correctly with context, template inheritance works, RSS feed validates, all page types supported",
+  "dependencies": ["I3.T2"],
   "parallelizable": true,
   "done": false
 }
@@ -32,96 +32,46 @@ This is the full specification of the task you must complete.
 
 The following are the relevant sections from the architecture and plan documents, which I found by analyzing the task description.
 
-### Context: task-i3-t2 (from 02_Iteration_I3.md)
+### Context: task-i3-t3 (from 02_Iteration_I3.md)
 
 ```markdown
-<!-- anchor: task-i3-t2 -->
-*   **Task 3.2:**
-    *   **Task ID:** `I3.T2`
-    *   **Description:** Implement markdown processor with python-markdown and pymdown-extensions. Support YAML frontmatter parsing, syntax highlighting, and content validation.
+<!-- anchor: task-i3-t3 -->
+*   **Task 3.3:**
+    *   **Task ID:** `I3.T3`
+    *   **Description:** Create Jinja2 template rendering system with base templates for homepage, post pages, archive, tags, and RSS feed. Implement template inheritance and context management.
     *   **Agent Type Hint:** `BackendAgent`
-    *   **Inputs:** Markdown processing requirements, frontmatter specification, content validation rules
-    *   **Input Files:** ["microblog/content/post_service.py"]
-    *   **Target Files:** ["microblog/builder/markdown_processor.py"]
-    *   **Deliverables:** Markdown processing engine with frontmatter support, syntax highlighting, content validation
-    *   **Acceptance Criteria:** Markdown renders to HTML correctly, YAML frontmatter extracts properly, syntax highlighting works, content validation catches errors
-    *   **Dependencies:** `I2.T4`
+    *   **Inputs:** Template requirements, site structure, Jinja2 best practices
+    *   **Input Files:** ["templates/base.html", "microblog/server/config.py"]
+    *   **Target Files:** ["microblog/builder/template_renderer.py", "templates/index.html", "templates/post.html", "templates/archive.html", "templates/tag.html", "templates/rss.xml"]
+    *   **Deliverables:** Template rendering engine, complete template set, context management, RSS feed generation
+    *   **Acceptance Criteria:** Templates render correctly with context, template inheritance works, RSS feed validates, all page types supported
+    *   **Dependencies:** `I3.T2`
     *   **Parallelizable:** Yes
+```
+
+### Context: technology-stack (from 02_Architecture_Overview.md)
+
+```markdown
+| **Template Engine** | Jinja2 | Latest | Industry standard with excellent performance, template inheritance, and extensive filter ecosystem. Native FastAPI integration. |
+```
+
+### Context: static-generation-strategy (from 02_Architecture_Overview.md)
+
+```markdown
+**Static Generation Strategy:**
+- Jinja2 templates provide flexibility for custom themes and layouts
+- python-markdown offers extensive plugin ecosystem for future enhancements
+- Separation of content (markdown) from presentation (templates) enables design iteration
 ```
 
 ### Context: iteration-3-plan (from 02_Iteration_I3.md)
 
 ```markdown
-<!-- anchor: iteration-3-plan -->
 ### Iteration 3: Static Site Generation & Build System
 
 *   **Iteration ID:** `I3`
 *   **Goal:** Implement core static site generator with template rendering, markdown processing, and atomic build system with backup/rollback
 *   **Prerequisites:** `I2` (Authentication and core models completed)
-*   **Tasks:**
-```
-
-### Context: key-entities (from 03_System_Structure_and_Data.md)
-
-```markdown
-<!-- anchor: key-entities -->
-**Key Entities:**
-
-1. **User**: Single admin user with authentication credentials (stored in SQLite)
-2. **Post**: Blog posts with metadata and content (stored as markdown files with YAML frontmatter)
-3. **Image**: Media files referenced in posts (stored in filesystem with metadata tracking)
-4. **Configuration**: System settings and blog metadata (stored as YAML configuration file)
-5. **Session**: Authentication sessions (stateless JWT tokens, no persistent storage)
-```
-
-### Context: data-model-diagram (from 03_System_Structure_and_Data.md)
-
-```markdown
-entity "Post File" as post {
-  --
-  **Frontmatter (YAML)**
-  title : VARCHAR(200)
-  date : DATE
-  slug : VARCHAR(200) <<optional>>
-  tags : ARRAY[VARCHAR]
-  draft : BOOLEAN = false
-  description : VARCHAR(300)
-  --
-  **Content (Markdown)**
-  content : TEXT
-  --
-  **File Metadata**
-  file_path : VARCHAR(500)
-  created_at : TIMESTAMP
-  modified_at : TIMESTAMP
-}
-```
-
-### Context: data-storage-strategy (from 03_System_Structure_and_Data.md)
-
-```markdown
-<!-- anchor: data-storage-strategy -->
-**Data Storage Strategy:**
-
-**SQLite Database (microblog.db):**
-- Stores single user authentication record
-- Lightweight, serverless, no external dependencies
-- Automatic schema creation on first run
-- Handles concurrent read access (dashboard operations)
-
-**File System Storage (content/):**
-- Markdown files with YAML frontmatter for posts
-- Images stored in organized directory structure
-- Configuration as human-readable YAML
-- Version control friendly (Git integration possible)
-- Direct file system access for build process
-
-**Generated Output (build/):**
-- Static HTML, CSS, and JavaScript files
-- Copied and optimized images
-- RSS feed and sitemap generation
-- Atomic generation with backup/rollback
-- Deployable to any static file server
 ```
 
 ---
@@ -131,33 +81,37 @@ entity "Post File" as post {
 The following analysis is based on my direct review of the current codebase. Use these notes and tips to guide your implementation.
 
 ### Relevant Existing Code
+
+*   **File:** `microblog/server/config.py`
+    *   **Summary:** This file contains the complete configuration management system with Pydantic models (SiteConfig, BuildConfig, etc.) and hot-reload support. The AppConfig class provides structured access to all site configuration.
+    *   **Recommendation:** You MUST import and use the `get_config()` function from this file to access site configuration. The configuration includes `site.title`, `site.url`, `site.author`, `site.description` which are essential for template context.
+
+*   **File:** `microblog/builder/markdown_processor.py`
+    *   **Summary:** This file contains a fully implemented MarkdownProcessor class with python-markdown, pymdown-extensions, syntax highlighting, and validation. It has methods like `process_content()` and `get_toc()` for table of contents.
+    *   **Recommendation:** You SHOULD import and use the `get_markdown_processor()` function from this file. The processor can generate HTML content and table of contents that you'll need in your templates.
+
 *   **File:** `microblog/content/post_service.py`
-    *   **Summary:** This file contains the complete PostService class that manages blog posts with filesystem storage, including CRUD operations, frontmatter parsing, and file handling. It already has a working `_parse_markdown_file` method that parses YAML frontmatter.
-    *   **Recommendation:** You MUST study this file carefully as it shows the expected frontmatter structure and how posts are loaded/parsed. The PostService already handles frontmatter parsing with regex and yaml.safe_load(). Your markdown processor should complement this by focusing on the markdown-to-HTML conversion.
+    *   **Summary:** This file provides the PostService class with complete CRUD operations for blog posts, including methods like `list_posts()`, `get_published_posts()`, and post filtering by tags. Posts are structured with frontmatter and content.
+    *   **Recommendation:** You MUST import and use the `get_post_service()` function from this file to retrieve post data for templates. The service provides filtered post lists that you'll need for homepage, archive, and tag pages.
 
-*   **File:** `microblog/content/validators.py`
-    *   **Summary:** This file defines the PostFrontmatter and PostContent dataclasses used throughout the system for validating blog post structure and metadata.
-    *   **Recommendation:** You SHOULD import and use these validation classes in your markdown processor. The PostContent and PostFrontmatter models are the standard data structures expected by the rest of the system.
-
-*   **File:** `pyproject.toml`
-    *   **Summary:** The project dependencies already include `markdown>=3.5.0` and `pymdown-extensions>=10.0.0`, exactly what you need for this task.
-    *   **Recommendation:** You can directly import and use these libraries - they are already installed and configured as project dependencies.
-
-*   **File:** `microblog/builder/__init__.py`
-    *   **Summary:** This is the builder package where your markdown processor will live. It's currently just a package docstring describing static site generation components.
-    *   **Recommendation:** Your new `markdown_processor.py` file should go in this directory alongside the existing `__init__.py`.
+*   **File:** `microblog/utils.py`
+    *   **Summary:** This file contains utility functions including `get_templates_dir()`, `get_project_root()`, `get_build_dir()`, and `ensure_directory()` for filesystem operations.
+    *   **Recommendation:** You SHOULD use these utility functions for path management. `get_templates_dir()` returns the templates directory path, which is essential for Jinja2 template loading.
 
 ### Implementation Tips & Notes
-*   **Tip:** The PostService already has frontmatter parsing logic in `_parse_markdown_file()` method using regex pattern `r'^---\s*\n(.*?)\n---\s*\n(.*)$'` and `yaml.safe_load()`. You should use a similar or compatible approach in your processor.
-*   **Note:** The project uses structured logging with the `logging` module. Follow the same pattern by getting a logger with `logger = logging.getLogger(__name__)` at the module level.
-*   **Warning:** The PostService expects date objects to be converted to/from ISO strings when serializing YAML. Your processor should handle date objects properly for consistency.
-*   **Code Style:** The project uses dataclasses, type hints, and follows the existing patterns seen in other modules. Follow the same conventions with proper docstrings and error handling.
-*   **Validation Integration:** The existing code uses `validate_post_content()` function from validators.py - your markdown processor should work with these validated PostContent objects.
-*   **Directory Structure:** Content is stored in `content/posts/` directory, and the project expects markdown files with `.md` extension and specific filename patterns like `YYYY-MM-DD-slug.md`.
-*   **Dependencies:** The project already includes python-frontmatter in dependencies, but the current PostService uses manual YAML parsing instead. You could choose either approach, but should remain consistent with existing patterns.
 
-### Strategic Recommendations
-*   **Primary Goal:** Create a markdown processor that takes validated PostContent objects and converts the markdown content to HTML with syntax highlighting, while preserving the frontmatter structure.
-*   **Integration Point:** Your processor should work seamlessly with the existing PostService and validation system - don't duplicate frontmatter parsing logic.
-*   **Error Handling:** Follow the existing exception patterns (PostFileError, PostValidationError) defined in post_service.py for consistency.
-*   **Testing:** The project has a comprehensive test suite in `tests/unit/` - you should design your processor to be easily testable with similar patterns.
+*   **Tip:** I confirmed that Jinja2 is already included in the project dependencies (version >=3.1.0) in pyproject.toml. You can import it directly.
+
+*   **Note:** The task specifies `templates/base.html` as an input file, but this file does not exist yet. You will need to create this base template first as the foundation for template inheritance.
+
+*   **Tip:** The PostContent objects from the post service have frontmatter attributes like `title`, `date`, `tags`, `description`, `slug`, and `is_draft`. Use these for template context.
+
+*   **Note:** The configuration system provides site-level information (`site.title`, `site.url`, `site.author`, `site.description`) that should be included in template context for all pages.
+
+*   **Warning:** The templates directory exists but is currently empty except for a dashboard subdirectory. You need to create all template files from scratch following Jinja2 best practices.
+
+*   **Tip:** For RSS feed generation, you'll need to format dates in RFC 2822 format and ensure proper XML escaping. Consider using Jinja2's built-in filters for this.
+
+*   **Note:** The acceptance criteria specifically mentions "template inheritance works" - this means your base.html template should define blocks that other templates extend, following standard Jinja2 patterns.
+
+*   **Tip:** The markdown processor has a `get_toc()` method that returns HTML table of contents - this could be useful for post pages with navigation.

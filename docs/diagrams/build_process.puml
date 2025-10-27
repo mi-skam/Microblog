@@ -1,0 +1,144 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title Build Process Sequence - Atomic Build Workflow with Backup/Rollback
+
+participant "CLI/Dashboard" as Client
+participant "Build Management Service" as BuildService
+participant "Configuration Manager" as ConfigManager
+participant "Post Service" as PostService
+participant "Template Renderer" as TemplateRenderer
+participant "Asset Manager" as AssetManager
+participant "File System" as FileSystem
+
+== Initialization & Safety Preparation ==
+
+Client -> BuildService : initiate_build()
+activate BuildService
+
+BuildService -> ConfigManager : load_config()
+activate ConfigManager
+ConfigManager -> FileSystem : read(content/_data/config.yaml)
+ConfigManager <-- FileSystem : config data
+ConfigManager -> ConfigManager : validate_config()
+BuildService <-- ConfigManager : BuildConfig(output_dir='build', backup_dir='build.bak')
+deactivate ConfigManager
+
+note right of BuildService : Extract build directories:\n- output_dir: 'build/'\n- backup_dir: 'build.bak/'
+
+BuildService -> BuildService : validate_build_preconditions()
+
+== Atomic Build Safety - Backup Creation ==
+
+BuildService -> FileSystem : check_exists(build/)
+alt build/ directory exists
+    BuildService -> FileSystem : remove_directory(build.bak/)
+    note right of BuildService : Remove old backup if exists
+
+    BuildService -> FileSystem : move_directory(build/ -> build.bak/)
+    note right of BuildService : Create backup by moving\nexisting build to build.bak/
+
+    BuildService -> FileSystem : create_directory(build/)
+    note right of BuildService : Create fresh build directory
+else build/ directory doesn't exist
+    BuildService -> FileSystem : create_directory(build/)
+    note right of BuildService : Create initial build directory
+end
+
+== Content Processing Phase ==
+
+BuildService -> PostService : get_published_posts()
+activate PostService
+PostService -> FileSystem : scan_directory(content/posts/)
+PostService -> PostService : load_and_validate_posts()
+loop for each .md file
+    PostService -> FileSystem : read_file(post.md)
+    PostService -> PostService : parse_frontmatter_and_content()
+    PostService -> PostService : validate_post_content()
+end
+BuildService <-- PostService : List<PostContent>
+deactivate PostService
+
+== Template Rendering Phase ==
+
+BuildService -> TemplateRenderer : render_all_pages(posts, config)
+activate TemplateRenderer
+TemplateRenderer -> TemplateRenderer : load_templates()
+
+loop for each page type
+    TemplateRenderer -> TemplateRenderer : render_template(template, data)
+    TemplateRenderer -> FileSystem : write_file(build/page.html)
+end
+
+loop for each post
+    TemplateRenderer -> TemplateRenderer : render_post_template(post)
+    TemplateRenderer -> FileSystem : write_file(build/posts/post.html)
+end
+
+TemplateRenderer -> TemplateRenderer : generate_index_pages()
+TemplateRenderer -> TemplateRenderer : generate_rss_feed()
+BuildService <-- TemplateRenderer : rendering_complete
+deactivate TemplateRenderer
+
+== Asset Copying Phase ==
+
+BuildService -> AssetManager : copy_static_assets()
+activate AssetManager
+AssetManager -> FileSystem : scan_directory(content/images/)
+AssetManager -> FileSystem : scan_directory(static/)
+
+loop for each asset
+    AssetManager -> FileSystem : copy_file(source -> build/assets/)
+end
+
+BuildService <-- AssetManager : assets_copied
+deactivate AssetManager
+
+== Build Completion & Verification ==
+
+BuildService -> BuildService : verify_build_integrity()
+BuildService -> FileSystem : validate_output_structure(build/)
+
+alt Build successful
+    BuildService -> FileSystem : remove_directory(build.bak/)
+    note right of BuildService : Remove backup on successful build
+
+    BuildService -> BuildService : log_build_success()
+    Client <-- BuildService : BuildResult(success=true, message="Build completed successfully")
+
+else Build failed at any step
+    == Rollback Mechanism ==
+    BuildService -> FileSystem : remove_directory(build/)
+    note right of BuildService : Remove failed build directory
+
+    alt backup exists
+        BuildService -> FileSystem : move_directory(build.bak/ -> build/)
+        note right of BuildService : Restore from backup
+        BuildService -> BuildService : log_rollback_success()
+        Client <-- BuildService : BuildResult(success=false, message="Build failed, restored from backup")
+    else no backup exists
+        BuildService -> BuildService : log_rollback_failure()
+        Client <-- BuildService : BuildResult(success=false, message="Build failed, no backup to restore")
+    end
+end
+
+deactivate BuildService
+
+note over Client, FileSystem
+**Atomic Build Safety Strategy:**
+
+1. **Backup Creation**: Existing build/ moved to build.bak/ before starting
+2. **Fresh Build**: New build/ directory created for clean generation
+3. **Phase Isolation**: Each phase (content, templates, assets) is independent
+4. **Error Handling**: Any failure triggers immediate rollback
+5. **Integrity Verification**: Build output validated before finalization
+6. **Cleanup**: Backup removed only after successful completion
+
+**Directory States:**
+- Pre-build: build/ (current), build.bak/ (previous backup)
+- During build: build/ (new), build.bak/ (current backup)
+- Success: build/ (new), build.bak/ (removed)
+- Failure: build/ (restored from backup), build.bak/ (removed)
+end note
+
+@enduml

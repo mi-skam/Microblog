@@ -8,36 +8,57 @@ The previous code submission did not pass verification. You must fix the followi
 
 Create comprehensive tests for build system including markdown processing, template rendering, asset management, and atomic build operations. Test build failure and rollback scenarios.
 
-**Acceptance Criteria:** All build components tested, atomic operations verified, rollback scenarios tested, test coverage >85%, performance tests included
-
 ---
 
 ## Issues Detected
 
-*   **Test Failure:** Multiple tests are failing due to incorrect PostContent initialization. The tests use `computed_slug` parameter which doesn't exist in the actual PostContent class.
-*   **Import Errors:** Many BuildGenerator tests fail with import/module errors, suggesting missing or incorrect dependencies.
-*   **Linting Errors:** Tests had multiple linting issues including unused imports and formatting problems (already fixed).
-*   **Incomplete Mocking:** Several tests use incomplete mocks that don't properly simulate the actual dependencies and their interfaces.
-*   **API Mismatch:** Integration tests assume APIs that don't match the actual implementation (e.g., PostContent constructor signature).
-*   **Performance Test Issues:** Performance tests fail due to missing psutil dependency and incorrect mocking setup.
-*   **Build Generator Errors:** All BuildGenerator tests produce errors, indicating fundamental issues with test setup and dependency mocking.
+### Test API Mismatches
+*   **API Mismatch:** Multiple tests fail because they use incorrect PostContent constructor arguments. The constructor expects `frontmatter`, `content`, `file_path`, `created_at`, `modified_at` but tests are passing `computed_slug` and `is_draft` which are properties.
+*   **API Mismatch:** Tests expect "python" language identifier to appear in processed markdown HTML, but the syntax highlighter processes code blocks and doesn't preserve the language name in output.
+*   **API Mismatch:** Some tests expect AssetManager to have `copy_all_assets` method but actual implementation has different method signatures.
+*   **Missing Dependencies:** Some tests expect methods like `get_all_tags` and `render_tag_page` on TemplateRenderer that may not exist in current implementation.
+
+### Test Coverage Gaps
+*   **Missing Tests:** Need additional atomic operation failure tests for concurrent builds, corrupted template scenarios, and permission-based failures.
+*   **Missing Tests:** Need performance tests that verify <5s build time for 100 posts requirement.
+*   **Missing Tests:** Need memory usage tests during large builds.
+*   **Missing Tests:** Need comprehensive rollback integrity verification tests.
 
 ---
 
 ## Best Approach to Fix
 
-You MUST fix the following specific issues:
+### Step 1: Fix PostContent Constructor Usage
+You MUST update all PostContent instantiation in tests to use correct constructor signature:
+```python
+# Wrong (current tests):
+post = PostContent(frontmatter=fm, content="...", computed_slug="...", is_draft=False)
 
-1. **Fix PostContent Usage**: Examine the actual PostContent class in `microblog/content/validators.py` and update all test code to use the correct constructor parameters. Remove any references to `computed_slug` if it doesn't exist.
+# Correct:
+post = PostContent(frontmatter=fm, content="...")
+# Then access post.computed_slug and post.is_draft as properties
+```
 
-2. **Fix BuildGenerator Test Setup**: Examine the actual BuildGenerator class in `microblog/builder/generator.py` and ensure all mocks properly simulate the expected dependencies and their method signatures.
+### Step 2: Fix Markdown Processing Expectations
+Update markdown tests to check for actual generated HTML structure instead of expecting language identifiers:
+```python
+# Instead of checking for "python" in html, check for syntax highlighting classes
+assert "highlight" in html or "codehilite" in html
+```
 
-3. **Add Missing Dependencies**: If psutil is required for performance tests, either add it to the project dependencies or mock the memory usage functionality appropriately.
+### Step 3: Fix AssetManager and TemplateRenderer Method Calls
+Review the actual implementation and update test expectations to match existing methods. Mock only methods that actually exist.
 
-4. **Verify Import Paths**: Ensure all imports in the test files match the actual module structure and class names in the codebase.
+### Step 4: Add Missing Atomic Operation Tests
+Add tests for:
+- Concurrent build safety
+- Backup integrity verification
+- Build interruption scenarios
+- Large file handling edge cases
+- Template corruption detection
+- Asset validation edge cases
 
-5. **Complete Mock Setup**: For each test class, ensure mocks properly implement all methods that are called during testing, including return values that match expected types.
+### Step 5: Ensure >85% Test Coverage
+Run coverage analysis and add tests for any uncovered code paths, particularly in error handling and edge cases.
 
-6. **Test Data Structure**: Create realistic test data that matches the actual data structures used by the build system components.
-
-The tests should comprehensively cover all BuildPhase enumerations, BuildResult success/failure scenarios, rollback mechanisms, and performance requirements as specified in the acceptance criteria.
+Focus on fixing the API mismatches first to establish a working test baseline, then extend with additional failure scenarios and rollback testing as required by the acceptance criteria.

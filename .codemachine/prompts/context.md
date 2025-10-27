@@ -32,32 +32,39 @@ This is the full specification of the task you must complete.
 
 The following are the relevant sections from the architecture and plan documents, which I found by analyzing the task description.
 
+### Context: task-i3-t7 (from 02_Iteration_I3.md)
+
+```markdown
+<!-- anchor: task-i3-t7 -->
+*   **Task 3.7:**
+    *   **Task ID:** `I3.T7`
+    *   **Description:** Create comprehensive tests for build system including markdown processing, template rendering, asset management, and atomic build operations. Test build failure and rollback scenarios.
+    *   **Agent Type Hint:** `TestingAgent`
+    *   **Inputs:** Build system implementation, testing requirements, failure scenario testing
+    *   **Input Files:** ["microblog/builder/generator.py", "microblog/builder/markdown_processor.py", "microblog/builder/template_renderer.py", "tests/conftest.py"]
+    *   **Target Files:** ["tests/unit/test_build_system.py", "tests/integration/test_build_process.py"]
+    *   **Deliverables:** Comprehensive build system test suite with failure scenario testing
+    *   **Acceptance Criteria:** All build components tested, atomic operations verified, rollback scenarios tested, test coverage >85%, performance tests included
+    *   **Dependencies:** `I3.T5`, `I3.T6`
+    *   **Parallelizable:** Yes
+```
+
 ### Context: iteration-3-plan (from 02_Iteration_I3.md)
 
 ```markdown
+<!-- anchor: iteration-3-plan -->
 ### Iteration 3: Static Site Generation & Build System
 
 *   **Iteration ID:** `I3`
 *   **Goal:** Implement core static site generator with template rendering, markdown processing, and atomic build system with backup/rollback
 *   **Prerequisites:** `I2` (Authentication and core models completed)
 *   **Tasks:**
-
-    *   **Task 3.7:**
-        *   **Task ID:** `I3.T7`
-        *   **Description:** Create comprehensive tests for build system including markdown processing, template rendering, asset management, and atomic build operations. Test build failure and rollback scenarios.
-        *   **Agent Type Hint:** `TestingAgent`
-        *   **Inputs:** Build system implementation, testing requirements, failure scenario testing
-        *   **Input Files:** ["microblog/builder/generator.py", "microblog/builder/markdown_processor.py", "microblog/builder/template_renderer.py", "tests/conftest.py"]
-        *   **Target Files:** ["tests/unit/test_build_system.py", "tests/integration/test_build_process.py"]
-        *   **Deliverables:** Comprehensive build system test suite with failure scenario testing
-        *   **Acceptance Criteria:** All build components tested, atomic operations verified, rollback scenarios tested, test coverage >85%, performance tests included
-        *   **Dependencies:** `I3.T5`, `I3.T6`
-        *   **Parallelizable:** Yes
 ```
 
 ### Context: verification-and-integration-strategy (from 03_Verification_and_Glossary.md)
 
 ```markdown
+<!-- anchor: verification-and-integration-strategy -->
 ## 5. Verification and Integration Strategy
 
 *   **Testing Levels:**
@@ -81,35 +88,14 @@ The following are the relevant sections from the architecture and plan documents
     *   **Security Scan**: Zero high-severity security vulnerabilities detected by bandit
     *   **Performance Benchmarks**: All performance targets met in automated testing
     *   **Documentation Coverage**: All public APIs and configuration options documented
-```
 
-### Context: architectural-style (from 02_Architecture_Overview.md)
-
-```markdown
-### 3.1. Architectural Style
-
-**Primary Style: Hybrid Static-First Architecture with Separation of Concerns**
-
-The MicroBlog system employs a hybrid architectural approach that combines static site generation with a dynamic management interface. This design separates the public-facing blog (served as static files) from the administrative interface (dynamic web application), providing optimal performance for readers while maintaining ease of management for content creators.
-
-**Key Architectural Patterns:**
-
-1. **Static-First Generation**: The public blog is generated as static HTML files, ensuring maximum performance, security, and deployment flexibility. This eliminates runtime dependencies for content delivery and enables hosting on any static file server.
-
-2. **Layered Monolith for Management**: The dashboard and build system follow a layered architecture pattern with clear separation between presentation (HTMX-enhanced web interface), business logic (content management and site generation), and data access (filesystem and SQLite) layers.
-
-3. **Command-Query Separation**: Clear distinction between read operations (serving static content, dashboard views) and write operations (content modification, site rebuilds) with appropriate performance optimizations for each.
-
-4. **Progressive Enhancement**: The dashboard uses HTMX for enhanced interactivity while maintaining functionality without JavaScript, ensuring accessibility and reliability.
-
-**Rationale for Architectural Choice:**
-
-- **Performance**: Static files provide sub-100ms page loads and can handle high traffic without server resources
-- **Simplicity**: Monolithic dashboard avoids distributed system complexity while maintaining clear internal boundaries
-- **Deployment Flexibility**: Static output can be deployed anywhere (CDN, static hosts, traditional servers)
-- **Developer Experience**: Clear separation enables focused development on each concern without cross-cutting complexity
-- **Reliability**: Atomic builds with rollback capabilities ensure consistent site state
-- **Security**: Static content eliminates many attack vectors; dynamic interface has minimal surface area
+*   **Artifact Validation:**
+    *   **PlantUML Diagrams**: Syntax validation and rendering verification for all diagram files
+    *   **OpenAPI Specification**: Schema validation and endpoint coverage verification
+    *   **Configuration Schema**: JSON Schema validation and comprehensive setting coverage
+    *   **Documentation Quality**: Spelling, grammar, and link validation for all documentation
+    *   **Template Validation**: Jinja2 template syntax checking and rendering verification
+    *   **Build Output Validation**: Generated HTML validation, link checking, and asset verification
 ```
 
 ---
@@ -120,38 +106,48 @@ The following analysis is based on my direct review of the current codebase. Use
 
 ### Relevant Existing Code
 
+*   **File:** `tests/unit/test_build_system.py`
+    *   **Summary:** This file already contains extensive unit tests for the build system components including markdown processing, template rendering, asset management, and build generator functionality.
+    *   **Recommendation:** You MUST build upon the existing comprehensive test structure. The file contains 1,518 lines of well-structured tests that you should extend, not replace.
+
+*   **File:** `tests/integration/test_build_process.py`
+    *   **Summary:** This file contains integration tests for the complete build process with realistic project structures and end-to-end workflows.
+    *   **Recommendation:** You SHOULD extend this file with additional failure scenarios and rollback testing as it already has a solid foundation for integration testing.
+
 *   **File:** `microblog/builder/generator.py`
-    *   **Summary:** This is the main build orchestrator implementing atomic build operations with backup/rollback capabilities. It coordinates markdown processing, template rendering, and asset copying with comprehensive progress tracking and error handling.
-    *   **Recommendation:** You MUST test all phases of the BuildGenerator.build() method including BuildPhase enumeration, BuildProgress reporting, BuildResult return values, and all failure scenarios with rollback mechanisms.
+    *   **Summary:** The main build generator implementing atomic operations with comprehensive error handling, progress tracking, and rollback mechanisms. Contains BuildPhase enum, BuildProgress/BuildResult classes, and BuildGenerator with full lifecycle management.
+    *   **Recommendation:** You MUST use the existing BuildPhase enum values and BuildResult structure in your tests. The atomic build process includes backup creation, content processing, template rendering, asset copying, verification, and cleanup phases.
 
 *   **File:** `microblog/builder/markdown_processor.py`
-    *   **Summary:** Markdown processor with python-markdown and pymdown-extensions for content processing. Includes frontmatter parsing, syntax highlighting, and content validation.
-    *   **Recommendation:** You SHOULD test the MarkdownProcessor class including process_content(), process_markdown_text(), validate_and_process(), and validate_content_structure() methods. Test both valid and invalid markdown content.
+    *   **Summary:** Markdown processor with python-markdown and pymdown-extensions, supporting YAML frontmatter parsing, syntax highlighting, and content validation.
+    *   **Recommendation:** You SHOULD test the MarkdownProcessingError exception handling and the validate_content_structure method for edge cases.
 
 *   **File:** `microblog/builder/template_renderer.py`
-    *   **Summary:** Jinja2 template rendering engine with site-wide context management, custom filters, and RSS feed generation. Handles template inheritance and validation.
-    *   **Recommendation:** You MUST test the TemplateRenderer class including all rendering methods (render_homepage, render_post, render_archive, render_tag_page, render_rss_feed) and template validation functionality.
+    *   **Summary:** Jinja2 template rendering system with template inheritance, custom filters, and context management for homepage, posts, archive, tags, and RSS feed generation.
+    *   **Recommendation:** You MUST test the TemplateRenderingError exception handling and custom template filters (_format_date, _create_excerpt, _format_rfc2822).
 
 *   **File:** `microblog/builder/asset_manager.py`
-    *   **Summary:** Asset management system for copying images and static files with validation, security checks, and change detection. Implements file validation and copying with error handling.
-    *   **Recommendation:** You SHOULD test the AssetManager class including copy_all_assets(), validate_file(), copy_directory_assets(), and security validation features.
+    *   **Summary:** Asset manager with file validation, security checks, path management, and change detection. Includes allowed file extensions, file size limits, and suspicious file pattern detection.
+    *   **Recommendation:** You SHOULD test the AssetManagingError exception handling and security validation features including large file rejection and suspicious file detection.
 
 *   **File:** `tests/conftest.py`
-    *   **Summary:** Contains shared pytest fixtures for configuration data, temporary files, and test utilities used across the test suite.
-    *   **Recommendation:** You MUST use the existing fixtures (temp_content_dir, valid_config_data, temp_config_file) and create additional fixtures for build system testing including mock content and templates.
+    *   **Summary:** Shared test fixtures providing temporary files, mock configurations, and test utilities used across all test modules.
+    *   **Recommendation:** You MUST import and use the existing fixtures (valid_config_data, temp_content_dir, mock_config_callback) for consistency.
 
 ### Implementation Tips & Notes
 
-*   **Tip:** The build system implements atomic operations with backup/rollback functionality. Your tests MUST verify that builds either complete successfully or rollback completely without leaving partial state.
+*   **Tip:** The existing test structure is already comprehensive with 1,518 lines covering unit tests for all components. Focus on extending failure scenarios and rollback testing rather than duplicating existing coverage.
 
-*   **Note:** BuildGenerator uses BuildPhase enum for progress tracking. Test all phases: INITIALIZING, BACKUP_CREATION, CONTENT_PROCESSING, TEMPLATE_RENDERING, ASSET_COPYING, VERIFICATION, CLEANUP, ROLLBACK, COMPLETED, FAILED.
+*   **Note:** The build system uses atomic operations with backup/rollback mechanisms. Your failure scenario tests should verify that BuildPhase.ROLLBACK and BuildPhase.FAILED phases are properly triggered and that backup restoration works correctly.
 
-*   **Warning:** The project requires >85% test coverage. Ensure you test all major code paths including success scenarios, various failure modes, and edge cases like empty content, missing templates, and invalid files.
+*   **Warning:** The existing tests use extensive mocking with unittest.mock. Ensure your new tests follow the same mocking patterns and don't interfere with the existing global instance management (get_markdown_processor, get_template_renderer, etc.).
 
-*   **Tip:** Performance testing is required with build time targets: <5s for 100 posts, <30s for 1000 posts. Create performance tests that validate these requirements.
+*   **Performance Requirement:** The acceptance criteria requires build time validation (<5s for 100 posts). The existing tests include performance tests in TestPerformanceBuildTests class - extend these rather than creating new ones.
 
-*   **Note:** The existing test structure follows pytest patterns with unit tests in tests/unit/ and integration tests in tests/integration/. Follow this pattern and use descriptive test method names like test_build_success_with_valid_content().
+*   **Coverage Target:** You need >85% test coverage. The existing tests are comprehensive, so focus on edge cases and error scenarios that might not be covered yet.
 
-*   **Warning:** Rollback scenarios are critical for atomic build safety. Test failure modes like template errors, markdown processing failures, asset copying failures, and verify that rollback restores the previous build state.
+*   **Rollback Testing:** The existing tests include some rollback scenarios in TestBuildFailureScenarios class. Extend this class with additional atomic operation failure tests and verify backup integrity.
 
-*   **Tip:** The build system processes different content types (markdown posts, templates, assets). Create comprehensive test data for each type and test the complete pipeline from source to generated output.
+*   **Integration Focus:** The integration tests already cover realistic project structures. Add tests for corrupted templates, large file handling, permission issues, and concurrent build scenarios.
+
+*   **Testing Strategy:** Use pytest fixtures from conftest.py, mock external dependencies, test both success and failure paths, and verify progress tracking and error reporting work correctly.

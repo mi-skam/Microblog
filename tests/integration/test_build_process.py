@@ -536,13 +536,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 frontmatter = PostFrontmatter(
                     title=f"Test Post {post_file.stem}",
                     date=date(2023, 12, 1),
-                    tags=["test", "integration"]
+                    tags=["test", "integration"],
+                    slug=post_file.stem
                 )
                 post = PostContent(
                     frontmatter=frontmatter,
-                    content=f"# Test Content for {post_file.stem}",
-                    computed_slug=post_file.stem,
-                    is_draft=False
+                    content=f"# Test Content for {post_file.stem}"
                 )
                 published_posts.append(post)
 
@@ -749,13 +748,12 @@ Some more content here to make the post substantial.
             frontmatter = PostFrontmatter(
                 title=f"Performance Test Post {i}",
                 date=date(2023, 12, 1 + i),
-                tags=["performance", "test"]
+                tags=["performance", "test"],
+                slug=f"perf-test-{i}"
             )
             post = PostContent(
                 frontmatter=frontmatter,
-                content=f"# Performance Test Content {i}\n\nContent for post {i}",
-                computed_slug=f"perf-test-{i}",
-                is_draft=False
+                content=f"# Performance Test Content {i}\n\nContent for post {i}"
             )
             published_posts.append(post)
 

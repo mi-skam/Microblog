@@ -10,18 +10,18 @@ This is the full specification of the task you must complete.
 
 ```json
 {
-  "task_id": "I3.T4",
+  "task_id": "I3.T5",
   "iteration_id": "I3",
   "iteration_goal": "Implement core static site generator with template rendering, markdown processing, and atomic build system with backup/rollback",
-  "description": "Implement asset manager for copying images and static files from content directory to build output. Handle file validation, path management, and build-time optimization.",
+  "description": "Create main build generator that orchestrates the complete build process with atomic operations, backup creation, and rollback capability. Implement build status tracking and progress reporting.",
   "agent_type_hint": "BackendAgent",
-  "inputs": "Asset management requirements, file copying strategy, image handling specifications",
-  "target_files": ["microblog/builder/asset_manager.py"],
-  "input_files": ["microblog/server/config.py"],
-  "deliverables": "Asset copying system, file validation, path management, static file handling",
-  "acceptance_criteria": "Images copy correctly to build directory, file paths resolve properly, validation prevents invalid files, static assets handled",
-  "dependencies": ["I1.T4"],
-  "parallelizable": true,
+  "inputs": "Build orchestration requirements, atomic build strategy, safety mechanisms",
+  "target_files": ["microblog/builder/generator.py"],
+  "input_files": ["microblog/builder/markdown_processor.py", "microblog/builder/template_renderer.py", "microblog/builder/asset_manager.py", "docs/diagrams/build_process.puml"],
+  "deliverables": "Build orchestrator, atomic build implementation, backup/rollback system, progress tracking",
+  "acceptance_criteria": "Build completes atomically (success or rollback), backup created before build, rollback works on failure, progress tracking functional",
+  "dependencies": ["I3.T2", "I3.T3", "I3.T4"],
+  "parallelizable": false,
   "done": false
 }
 ```
@@ -32,114 +32,58 @@ This is the full specification of the task you must complete.
 
 The following are the relevant sections from the architecture and plan documents, which I found by analyzing the task description.
 
-### Context: task-i3-t4 (from 02_Iteration_I3.md)
+### Context: architectural-style (from 02_Architecture_Overview.md)
 
 ```markdown
-<!-- anchor: task-i3-t4 -->
-*   **Task 3.4:**
-    *   **Task ID:** `I3.T4`
-    *   **Description:** Implement asset manager for copying images and static files from content directory to build output. Handle file validation, path management, and build-time optimization.
+**Primary Style: Hybrid Static-First Architecture with Separation of Concerns**
+
+The MicroBlog system employs a hybrid architectural approach that combines static site generation with a dynamic management interface. This design separates the public-facing blog (served as static files) from the administrative interface (dynamic web application), providing optimal performance for readers while maintaining ease of management for content creators.
+
+**Key Architectural Patterns:**
+
+1. **Static-First Generation**: The public blog is generated as static HTML files, ensuring maximum performance, security, and deployment flexibility. This eliminates runtime dependencies for content delivery and enables hosting on any static file server.
+
+2. **Layered Monolith for Management**: The dashboard and build system follow a layered architecture pattern with clear separation between presentation (HTMX-enhanced web interface), business logic (content management and site generation), and data access (filesystem and SQLite) layers.
+
+3. **Command-Query Separation**: Clear distinction between read operations (serving static content, dashboard views) and write operations (content modification, site rebuilds) with appropriate performance optimizations for each.
+
+4. **Progressive Enhancement**: The dashboard uses HTMX for enhanced interactivity while maintaining functionality without JavaScript, ensuring accessibility and reliability.
+
+**Rationale for Architectural Choice:**
+
+- **Performance**: Static files provide sub-100ms page loads and can handle high traffic without server resources
+- **Simplicity**: Monolithic dashboard avoids distributed system complexity while maintaining clear internal boundaries
+- **Deployment Flexibility**: Static output can be deployed anywhere (CDN, static hosts, traditional servers)
+- **Developer Experience**: Clear separation enables focused development on each concern without cross-cutting complexity
+- **Reliability**: Atomic builds with rollback capabilities ensure consistent site state
+- **Security**: Static content eliminates many attack vectors; dynamic interface has minimal surface area
+```
+
+### Context: functional-requirements-summary (from 01_Context_and_Drivers.md)
+
+```markdown
+**Static Site Generation:**
+- Parse markdown files and render them through Jinja2 templates
+- Generate complete static HTML website in dedicated build directory
+- Copy all media assets from content to build directory
+- Create RSS feed for content syndication
+- Implement atomic build process with backup and rollback capabilities
+```
+
+### Context: task-i3-t5 (from 02_Iteration_I3.md)
+
+```markdown
+*   **Task 3.5:**
+    *   **Task ID:** `I3.T5`
+    *   **Description:** Create main build generator that orchestrates the complete build process with atomic operations, backup creation, and rollback capability. Implement build status tracking and progress reporting.
     *   **Agent Type Hint:** `BackendAgent`
-    *   **Inputs:** Asset management requirements, file copying strategy, image handling specifications
-    *   **Input Files:** ["microblog/server/config.py"]
-    *   **Target Files:** ["microblog/builder/asset_manager.py"]
-    *   **Deliverables:** Asset copying system, file validation, path management, static file handling
-    *   **Acceptance Criteria:** Images copy correctly to build directory, file paths resolve properly, validation prevents invalid files, static assets handled
-    *   **Dependencies:** `I1.T4`
-    *   **Parallelizable:** Yes
-```
-
-### Context: directory-structure (from 01_Plan_Overview_and_Setup.md)
-
-```markdown
-<!-- anchor: directory-structure -->
-## 3. Directory Structure
-
-*   **Root Directory:** `microblog/`
-*   **Structure Definition:** Organized for clear separation of concerns with dedicated locations for source code, templates, content, and generated artifacts.
-
-~~~
-microblog/
-├── microblog/                      # Main Python package
-│   ├── builder/                    # Static site generation
-│   │   ├── __init__.py
-│   │   ├── generator.py            # Main build orchestration
-│   │   ├── markdown_processor.py   # Markdown parsing and frontmatter
-│   │   ├── template_renderer.py    # Jinja2 template rendering
-│   │   └── asset_manager.py        # Image and static file copying
-├── content/                        # User content directory (runtime)
-│   ├── posts/                      # Markdown blog posts
-│   ├── pages/                      # Static pages (about, contact, etc.)
-│   ├── images/                     # User-uploaded images
-│   └── _data/
-│       └── config.yaml             # Site configuration
-├── build/                          # Generated static site (gitignored)
-├── build.bak/                      # Build backup directory (gitignored)
-├── static/                         # Static assets for dashboard and site
-│   ├── css/
-│   │   ├── dashboard.css           # Dashboard-specific styles
-│   │   └── site.css                # Public site styles (Pico.css based)
-│   ├── js/
-│   │   ├── htmx.min.js             # Vendored HTMX library
-│   │   └── dashboard.js            # Minimal dashboard JavaScript
-│   └── images/
-│       └── favicon.ico             # Site favicon
-~~~
-```
-
-### Context: data-storage-strategy (from 03_System_Structure_and_Data.md)
-
-```markdown
-<!-- anchor: data-storage-strategy -->
-**Data Storage Strategy:**
-
-**File System Storage (content/):**
-- Markdown files with YAML frontmatter for posts
-- Images stored in organized directory structure
-- Configuration as human-readable YAML
-- Version control friendly (Git integration possible)
-- Direct file system access for build process
-
-**Generated Output (build/):**
-- Static HTML, CSS, and JavaScript files
-- Copied and optimized images
-- RSS feed and sitemap generation
-- Atomic generation with backup/rollback
-- Deployable to any static file server
-
-**Performance Considerations:**
-- File system operations optimized for sequential reading during builds
-- SQLite provides excellent performance for single-user authentication
-- Content directory structure designed for efficient traversal
-- Build output optimized for CDN and static hosting performance
-```
-
-### Context: core-architecture (from 01_Plan_Overview_and_Setup.md)
-
-```markdown
-<!-- anchor: core-architecture -->
-## 2. Core Architecture
-
-*   **Architectural Style:** Hybrid Static-First Architecture with Layered Monolith for Management
-*   **Technology Stack:**
-    *   Frontend: HTMX 1.9+ (vendored), Pico.css (<10KB), Vanilla JavaScript (minimal)
-    *   Backend: FastAPI 0.100+, Python 3.10+, Uvicorn ASGI server
-    *   Database: SQLite3 (Python stdlib) for single user authentication
-    *   Template Engine: Jinja2 for HTML generation and dashboard rendering
-    *   Markdown: python-markdown + pymdown-extensions for content processing
-    *   Authentication: python-jose + passlib[bcrypt] for JWT and password hashing
-    *   CLI: Click for command-line interface and management tools
-    *   File Watching: watchfiles for development mode configuration hot-reload
-    *   Deployment: Docker-ready, systemd service, nginx/Caddy reverse proxy support
-*   **Key Components/Services:**
-    *   **Authentication Service**: JWT-based single-user authentication with bcrypt password hashing
-    *   **Content Management Service**: CRUD operations for posts with markdown processing and validation
-    *   **Static Site Generator**: Template rendering and asset copying with atomic build process
-    *   **Dashboard Web Application**: HTMX-enhanced interface for content management and live preview
-    *   **Image Management Service**: Upload, validation, and organization of media files
-    *   **Build Management Service**: Orchestrates site generation with backup and rollback capabilities
-    *   **CLI Interface**: Commands for build, serve, user creation, and system management
-    *   **Configuration Manager**: YAML-based settings with validation and hot-reload support
+    *   **Inputs:** Build orchestration requirements, atomic build strategy, safety mechanisms
+    *   **Input Files:** ["microblog/builder/markdown_processor.py", "microblog/builder/template_renderer.py", "microblog/builder/asset_manager.py", "docs/diagrams/build_process.puml"]
+    *   **Target Files:** ["microblog/builder/generator.py"]
+    *   **Deliverables:** Build orchestrator, atomic build implementation, backup/rollback system, progress tracking
+    *   **Acceptance Criteria:** Build completes atomically (success or rollback), backup created before build, rollback works on failure, progress tracking functional
+    *   **Dependencies:** `I3.T2`, `I3.T3`, `I3.T4`
+    *   **Parallelizable:** No
 ```
 
 ---
@@ -150,34 +94,48 @@ The following analysis is based on my direct review of the current codebase. Use
 
 ### Relevant Existing Code
 
-*   **File:** `microblog/server/config.py`
-    *   **Summary:** This file contains the comprehensive configuration management system with YAML parsing, validation, and hot-reload support. It defines `BuildConfig` with `output_dir` and `backup_dir` settings.
-    *   **Recommendation:** You MUST import and use the `get_config()` function to access build directory paths. The `BuildConfig` provides `output_dir` (defaults to 'build') and `backup_dir` (defaults to 'build.bak') settings.
-
-*   **File:** `microblog/utils.py`
-    *   **Summary:** This file contains shared utilities including directory management and path helpers. It provides `ensure_directory()`, `safe_copy_file()`, and path getter functions.
-    *   **Recommendation:** You SHOULD reuse the existing `safe_copy_file()` and `ensure_directory()` functions. The file also provides `get_content_dir()`, `get_build_dir()`, and `get_static_dir()` path helpers that you MUST use for consistency.
-
 *   **File:** `microblog/builder/markdown_processor.py`
-    *   **Summary:** This file shows the established pattern for builder components with error handling, logging, and global instance management.
-    *   **Recommendation:** You MUST follow the same architectural pattern: create an `AssetManagingError` exception class, use comprehensive logging, and provide a global `get_asset_manager()` function.
+    *   **Summary:** This file provides complete markdown processing with YAML frontmatter support, syntax highlighting, content validation, and error handling. It includes a global singleton instance via `get_markdown_processor()`.
+    *   **Recommendation:** You MUST import and use the `get_markdown_processor()` function to get the global processor instance. The processor has methods like `process_content()`, `validate_and_process()`, and `process_file_content()` that your generator will need.
 
 *   **File:** `microblog/builder/template_renderer.py`
-    *   **Summary:** This file demonstrates the builder module pattern with initialization, error handling, and integration with the configuration system.
-    *   **Recommendation:** You SHOULD follow the same initialization pattern and integrate with the configuration system using `get_config()`.
+    *   **Summary:** This file provides Jinja2 template rendering with site-wide context management, RSS feed generation, and template validation. It includes methods for rendering different page types (homepage, posts, archives, tags, RSS).
+    *   **Recommendation:** You MUST import and use the `get_template_renderer()` function to get the global renderer instance. Key methods include `render_homepage()`, `render_post()`, `render_archive()`, `render_tag_page()`, and `render_rss_feed()`.
+
+*   **File:** `microblog/builder/asset_manager.py`
+    *   **Summary:** This file handles copying images and static files from content directory to build output, with file validation, path management, and security checks. It supports multiple asset source mappings and efficient update detection.
+    *   **Recommendation:** You MUST import and use the `get_asset_manager()` function to get the global asset manager instance. The main method you'll need is `copy_all_assets()` which returns a results dictionary with copy statistics.
+
+*   **File:** `microblog/server/config.py`
+    *   **Summary:** This file provides configuration management with BuildConfig that includes `output_dir` and `backup_dir` settings. The BuildConfig has validation and defaults for build-related settings.
+    *   **Recommendation:** You MUST import and use the `get_config()` function to access build configuration. The config has `config.build.output_dir` and `config.build.backup_dir` properties that are essential for your atomic build strategy.
+
+*   **File:** `microblog/content/post_service.py`
+    *   **Summary:** This file provides post management with CRUD operations for markdown posts, including methods to get published posts and handle post filtering.
+    *   **Recommendation:** You SHOULD import and use `get_post_service()` to access post data. The service has `get_published_posts()` method which returns the posts that need to be built.
+
+*   **File:** `microblog/utils.py`
+    *   **Summary:** This file provides utility functions including `ensure_directory()` for safe directory creation, path helpers like `get_project_root()`, and file operation utilities.
+    *   **Recommendation:** You MUST import and use `ensure_directory()` for safe directory creation during the build process. Also use the path helper functions for consistent directory access.
+
+*   **File:** `docs/diagrams/build_process.puml`
+    *   **Summary:** This file contains the complete sequence diagram showing the atomic build workflow with backup creation, content processing, template rendering, and rollback mechanisms. It documents the complete build safety strategy.
+    *   **Recommendation:** You MUST follow the sequence and safety strategy outlined in this diagram. It shows the precise order of operations and error handling that your generator must implement.
 
 ### Implementation Tips & Notes
 
-*   **Tip:** I found the build process sequence diagram at `docs/diagrams/build_process.puml` shows the asset manager is called during the "Asset Copying Phase" by the Build Management Service. Your asset manager will be invoked as part of the atomic build workflow.
+*   **Tip:** The configuration system uses `BuildConfig` with `output_dir` (default: 'build') and `backup_dir` (default: 'build.bak') properties. These are essential for implementing the atomic build strategy.
 
-*   **Note:** The configuration file at `content/_data/config.yaml` shows the build settings structure. The asset manager needs to handle copying from multiple sources: `content/images/` (user uploads) and `static/` (dashboard assets) to the build output directory.
+*   **Note:** All three builder components (markdown_processor, template_renderer, asset_manager) use global singleton instances accessed via `get_*()` functions. Follow this pattern for consistency.
 
-*   **Tip:** The directory structure shows that images go to `content/images/` and static assets are in `static/`. Both need to be copied to the build directory with proper organization.
+*   **Warning:** The atomic build strategy requires very careful directory management. You MUST create backup before starting, work in a fresh build directory, and only remove backup on successful completion. Any failure should trigger rollback from backup.
 
-*   **Warning:** The build process diagram emphasizes atomic operations with backup/rollback. Your asset manager MUST support the atomic build pattern - if copying fails at any point, the build system should be able to rollback cleanly.
+*   **Tip:** The build process diagram shows a specific sequence: Configuration → Backup Creation → Content Processing → Template Rendering → Asset Copying → Verification → Cleanup/Rollback. Your generator must follow this exact order.
 
-*   **Pattern:** All builder modules follow the pattern: `SomeBuilderError` exception class, logging, initialization with config, and a global getter function like `get_asset_manager()`.
+*   **Note:** The asset manager's `copy_all_assets()` method returns a results dictionary with success/failure counts. You should use this for build status reporting and to detect copy failures.
 
-*   **Security:** File validation is mentioned in the acceptance criteria. You SHOULD implement validation to prevent copying of dangerous file types or files outside expected locations.
+*   **Warning:** The codebase uses comprehensive error handling and logging throughout. Your generator must follow the same patterns, logging all major steps and handling all exceptions gracefully.
 
-*   **Performance:** The architecture emphasizes build performance targets (<5s for 100 posts). Your asset copying should be efficient and only copy files that have changed when possible.
+*   **Tip:** The template renderer has methods for all page types needed: `render_homepage()`, `render_post()`, `render_archive()`, `render_tag_page()`, and `render_rss_feed()`. You'll need to orchestrate calls to all of these.
+
+*   **Note:** The build process should be designed to be called both from CLI and from the dashboard. Consider how progress reporting and status updates will work in both contexts.

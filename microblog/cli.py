@@ -10,6 +10,12 @@ from pathlib import Path
 
 import click
 
+from microblog.auth.models import User
+from microblog.database import (
+    create_admin_user,
+    get_database_path,
+    setup_database_if_needed,
+)
 from microblog.utils import get_build_dir, get_content_dir, get_project_root
 
 
@@ -98,6 +104,12 @@ def serve(
 @main.command()
 @click.option("--username", "-u", prompt=True, help="Username for the blog admin")
 @click.option(
+    "--email",
+    "-e",
+    prompt=True,
+    help="Email address for the blog admin"
+)
+@click.option(
     "--password",
     "-p",
     prompt=True,
@@ -107,7 +119,7 @@ def serve(
 )
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing user if present")
 @click.pass_context
-def create_user(ctx: click.Context, username: str, password: str, force: bool) -> None:
+def create_user(ctx: click.Context, username: str, email: str, password: str, force: bool) -> None:
     """
     Create a new admin user for the blog.
 
@@ -118,14 +130,47 @@ def create_user(ctx: click.Context, username: str, password: str, force: bool) -
 
     if verbose:
         click.echo(f"Creating user: {username}")
+        click.echo(f"Email: {email}")
         click.echo(f"Force overwrite: {force}")
 
-    # TODO: Implement actual user creation logic in future iterations
-    click.echo("User creation functionality will be implemented in the next iteration")
-    click.echo(f"Would create user: {username}")
+    try:
+        # Initialize database if needed
+        if not setup_database_if_needed():
+            click.echo(click.style("ERROR: Failed to initialize database", fg="red"))
+            return
 
-    if force:
-        click.echo("Force overwrite flag acknowledged")
+        db_path = get_database_path()
+
+        # Handle existing user scenario
+        if User.user_exists(db_path) and not force:
+            click.echo(click.style("ERROR: Admin user already exists. Use --force to overwrite.", fg="red"))
+            return
+
+        # If force is enabled and user exists, we need to handle it
+        # Note: Current User model doesn't support deletion, so we'll show a warning
+        if User.user_exists(db_path) and force:
+            click.echo(click.style("WARNING: Admin user already exists. Creating new user will fail due to database constraints.", fg="yellow"))
+            click.echo("Consider using a different username or resetting the database.")
+
+        # Create the admin user
+        user = create_admin_user(username, email, password)
+
+        if user:
+            click.echo(click.style(f"SUCCESS: Admin user '{username}' created successfully!", fg="green"))
+            if verbose:
+                click.echo(f"User ID: {user.user_id}")
+                click.echo(f"Role: {user.role}")
+                click.echo(f"Created at: {user.created_at}")
+        else:
+            click.echo(click.style("ERROR: Failed to create user. User may already exist.", fg="red"))
+
+    except ValueError as e:
+        click.echo(click.style(f"VALIDATION ERROR: {e}", fg="red"))
+    except Exception as e:
+        click.echo(click.style(f"ERROR: {e}", fg="red"))
+        if verbose:
+            import traceback
+            click.echo(traceback.format_exc())
 
 
 @main.command()

@@ -8,57 +8,47 @@ The previous code submission did not pass verification. You must fix the followi
 
 Create comprehensive tests for build system including markdown processing, template rendering, asset management, and atomic build operations. Test build failure and rollback scenarios.
 
+**Agent Type Hint:** TestingAgent
+**Inputs:** Build system implementation, testing requirements, failure scenario testing
+**Input Files:** ["microblog/builder/generator.py", "microblog/builder/markdown_processor.py", "microblog/builder/template_renderer.py", "tests/conftest.py"]
+**Target Files:** ["tests/unit/test_build_system.py", "tests/integration/test_build_process.py"]
+**Deliverables:** Comprehensive build system test suite with failure scenario testing
+**Acceptance Criteria:** All build components tested, atomic operations verified, rollback scenarios tested, test coverage >85%, performance tests included
+
 ---
 
 ## Issues Detected
 
-### Test API Mismatches
-*   **API Mismatch:** Multiple tests fail because they use incorrect PostContent constructor arguments. The constructor expects `frontmatter`, `content`, `file_path`, `created_at`, `modified_at` but tests are passing `computed_slug` and `is_draft` which are properties.
-*   **API Mismatch:** Tests expect "python" language identifier to appear in processed markdown HTML, but the syntax highlighter processes code blocks and doesn't preserve the language name in output.
-*   **API Mismatch:** Some tests expect AssetManager to have `copy_all_assets` method but actual implementation has different method signatures.
-*   **Missing Dependencies:** Some tests expect methods like `get_all_tags` and `render_tag_page` on TemplateRenderer that may not exist in current implementation.
-
-### Test Coverage Gaps
-*   **Missing Tests:** Need additional atomic operation failure tests for concurrent builds, corrupted template scenarios, and permission-based failures.
-*   **Missing Tests:** Need performance tests that verify <5s build time for 100 posts requirement.
-*   **Missing Tests:** Need memory usage tests during large builds.
-*   **Missing Tests:** Need comprehensive rollback integrity verification tests.
+* **Test Failure:** `TestAssetManager::test_copy_directory_assets` - Assertion failure with expected 2 total_failed but got 0
+* **Test Failure:** `TestBuildGenerator::test_build_failure_with_rollback` - Expected 'rollback successful' in error message but got "Build failed and rollback failed: Template rendering failed: 'Mock' object is not iterable"
+* **Test Failure:** `TestBuildFailureScenarios::test_build_with_insufficient_permissions` - Expected 'preconditions validation failed' but got 'build failed but rollback successful: failed to create backup'
+* **Test Failure:** `TestPerformanceBuildTests::test_build_time_small_content` and `test_build_time_medium_content` - Performance tests failing due to assertion errors
+* **Test Failure:** `TestAtomicOperationFailures::test_build_interruption_scenarios` - Expected 'Build interrupted' in error message but got 'Content processing failed: Failed to process 1 posts'
+* **Integration Test Failures:** Multiple integration tests failing due to missing assets and incorrect mock setup
+* **Mock Object Issues:** Several tests have incorrect mock configurations causing "'Mock' object is not iterable" and similar errors
+* **PostContent Constructor Issues:** Tests using invalid PostContent constructor parameters (computed_slug, is_draft don't exist)
 
 ---
 
 ## Best Approach to Fix
 
-### Step 1: Fix PostContent Constructor Usage
-You MUST update all PostContent instantiation in tests to use correct constructor signature:
-```python
-# Wrong (current tests):
-post = PostContent(frontmatter=fm, content="...", computed_slug="...", is_draft=False)
+You MUST fix the failing tests by addressing the following specific issues:
 
-# Correct:
-post = PostContent(frontmatter=fm, content="...")
-# Then access post.computed_slug and post.is_draft as properties
-```
+1. **Fix PostContent Constructor Usage:** Remove invalid parameters `computed_slug` and `is_draft` from PostContent instantiations throughout the test files. PostContent only accepts `frontmatter` and `content` parameters.
 
-### Step 2: Fix Markdown Processing Expectations
-Update markdown tests to check for actual generated HTML structure instead of expecting language identifiers:
-```python
-# Instead of checking for "python" in html, check for syntax highlighting classes
-assert "highlight" in html or "codehilite" in html
-```
+2. **Fix Mock Object Configuration:** Ensure all mock objects used in tests properly implement the expected interfaces:
+   - Mock iterables should return actual iterables, not Mock objects
+   - Template renderer mocks should properly handle template validation and rendering
+   - Asset manager mocks should return proper data structures
 
-### Step 3: Fix AssetManager and TemplateRenderer Method Calls
-Review the actual implementation and update test expectations to match existing methods. Mock only methods that actually exist.
+3. **Fix Error Message Assertions:** Update assertion checks to match the actual error messages returned by the build system:
+   - Check for specific error patterns rather than exact string matches
+   - Verify that error messages contain relevant information about the failure cause
 
-### Step 4: Add Missing Atomic Operation Tests
-Add tests for:
-- Concurrent build safety
-- Backup integrity verification
-- Build interruption scenarios
-- Large file handling edge cases
-- Template corruption detection
-- Asset validation edge cases
+4. **Fix Performance Test Logic:** Review and correct the performance test implementations to properly measure build times and assert reasonable performance benchmarks.
 
-### Step 5: Ensure >85% Test Coverage
-Run coverage analysis and add tests for any uncovered code paths, particularly in error handling and edge cases.
+5. **Fix Integration Test Asset Handling:** Ensure integration tests properly set up and verify asset copying functionality, including creating the necessary directory structures and files.
 
-Focus on fixing the API mismatches first to establish a working test baseline, then extend with additional failure scenarios and rollback testing as required by the acceptance criteria.
+6. **Fix Atomic Operation Test Scenarios:** Correct the build interruption test to properly simulate and verify build interruption scenarios and rollback mechanisms.
+
+Focus on making tests pass while maintaining their intended functionality and coverage goals. All tests must pass without compromising the quality and comprehensiveness of the test suite.

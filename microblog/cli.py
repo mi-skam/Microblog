@@ -6,11 +6,13 @@ the microblog application.
 """
 
 import os
+import signal
 import sys
 import time
 from pathlib import Path
 
 import click
+import uvicorn
 from watchfiles import watch as watch_files
 
 from microblog.auth.models import User
@@ -20,6 +22,7 @@ from microblog.database import (
     get_database_path,
     setup_database_if_needed,
 )
+from microblog.server.app import get_app, get_dev_app
 from microblog.server.config import get_config_manager
 from microblog.utils import get_build_dir, get_content_dir, get_project_root
 
@@ -205,38 +208,118 @@ def build(ctx: click.Context, output: str, force: bool, watch: bool, config: str
 
 
 @main.command()
-@click.option("--host", "-h", default="127.0.0.1", help="Host to bind the server")
-@click.option("--port", "-p", default=8000, type=int, help="Port to bind the server")
+@click.option("--host", "-h", default=None, help="Host to bind the server")
+@click.option("--port", "-p", default=None, type=int, help="Port to bind the server")
 @click.option("--reload", is_flag=True, help="Enable auto-reload for development")
 @click.option(
     "--dashboard-only", is_flag=True, help="Serve only the dashboard (no static site)"
 )
+@click.option(
+    "--config", "-c", type=click.Path(exists=True), help="Override configuration file path"
+)
 @click.pass_context
 def serve(
-    ctx: click.Context, host: str, port: int, reload: bool, dashboard_only: bool
+    ctx: click.Context, host: str, port: int, reload: bool, dashboard_only: bool, config: str
 ) -> None:
     """
-    Start the development server.
+    Start the development or production server.
 
-    Serves the generated static site and provides access to the
-    management dashboard for content editing.
+    Serves the microblog application with dashboard access. In development mode,
+    provides hot-reload capabilities for configuration and code changes.
     """
     verbose = ctx.obj.get("verbose", False)
 
-    if verbose:
-        click.echo(f"Starting server on {host}:{port}")
-        click.echo(f"Auto-reload: {reload}")
-        click.echo(f"Dashboard only: {dashboard_only}")
+    try:
+        # Initialize configuration manager
+        config_manager = get_config_manager(dev_mode=reload)
 
-    # TODO: Implement actual server logic in future iterations
-    click.echo("Server functionality will be implemented in the next iteration")
-    click.echo(f"Would serve on: http://{host}:{port}")
+        # Load custom config if provided
+        if config:
+            config_manager.config_path = Path(config)
+            try:
+                config_manager.load_config()
+                if verbose:
+                    click.echo(f"Loaded configuration from {config}")
+            except Exception as e:
+                click.echo(click.style(f"ERROR: Failed to load configuration from {config}: {e}", fg="red"))
+                sys.exit(1)
 
-    if dashboard_only:
-        click.echo("Dashboard-only mode acknowledged")
+        app_config = config_manager.config
 
-    if reload:
-        click.echo("Auto-reload mode acknowledged")
+        # Determine host and port (CLI options override config)
+        server_host = host or app_config.server.host
+        server_port = port or app_config.server.port
+
+        # Choose app based on development mode
+        if reload:
+            app_factory = get_dev_app
+            mode_name = "development"
+        else:
+            app_factory = get_app
+            mode_name = "production"
+
+        if verbose:
+            click.echo(f"Starting {mode_name} server on {server_host}:{server_port}")
+            click.echo(f"Auto-reload: {reload}")
+            click.echo(f"Dashboard only: {dashboard_only}")
+            if config:
+                click.echo(f"Using configuration: {config}")
+
+        # Show startup message
+        click.echo(click.style(f"Starting microblog server in {mode_name} mode", fg="green"))
+        click.echo(f"Server will be available at: http://{server_host}:{server_port}")
+
+        if reload:
+            click.echo("Development mode: Hot-reload enabled")
+        else:
+            click.echo("Production mode: Optimized for performance")
+
+        click.echo("Press Ctrl+C to stop the server")
+
+        # Set up graceful shutdown handling
+        shutdown_event = None
+
+        def signal_handler(signum, frame):
+            """Handle shutdown signals gracefully."""
+            nonlocal shutdown_event
+            if verbose:
+                click.echo(f"\nReceived signal {signum}, shutting down gracefully...")
+            else:
+                click.echo("\nShutting down server...")
+
+            if shutdown_event and hasattr(shutdown_event, 'set'):
+                shutdown_event.set()
+
+        # Register signal handlers for graceful shutdown
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+
+        # Configure uvicorn log level based on verbose mode
+        log_level = "debug" if verbose else "info"
+
+        # Start the server
+        uvicorn.run(
+            app_factory,
+            host=server_host,
+            port=server_port,
+            reload=reload,
+            log_level=log_level,
+            access_log=verbose,
+            reload_dirs=["microblog/"] if reload else None,
+            reload_includes=["*.py", "*.yaml", "*.yml"] if reload else None,
+        )
+
+    except KeyboardInterrupt:
+        if verbose:
+            click.echo("\nServer stopped by user")
+        else:
+            click.echo("\nServer stopped")
+    except Exception as e:
+        click.echo(click.style(f"ERROR: Failed to start server: {e}", fg="red"))
+        if verbose:
+            import traceback
+            click.echo(traceback.format_exc())
+        sys.exit(1)
 
 
 @main.command()

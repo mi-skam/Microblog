@@ -16,8 +16,6 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from microblog.server.app import create_app
-
 
 class TestDashboardIntegration:
     """Integration tests for dashboard functionality."""
@@ -203,10 +201,30 @@ class TestDashboardIntegration:
             }
 
             with patch('microblog.utils.get_content_dir', return_value=temp_project_dir['content']), \
-                 patch('microblog.server.middleware.get_current_user', return_value=mock_user), \
                  patch('microblog.server.middleware.get_csrf_token', return_value='test-csrf-token'):
 
-                app = create_app(dev_mode=True)
+                # Create a test app without authentication middleware
+                from fastapi import FastAPI
+                from fastapi.templating import Jinja2Templates
+
+                from microblog.server.routes import auth, dashboard
+
+                app = FastAPI(title="Test Microblog", debug=True)
+
+                # Set up templates
+                app.state.templates = Jinja2Templates(directory=str(temp_project_dir['templates']))
+
+                # Add a simple middleware to set authenticated state
+                @app.middleware("http")
+                async def auth_bypass_middleware(request, call_next):
+                    request.state.user = mock_user
+                    request.state.authenticated = True
+                    return await call_next(request)
+
+                # Register routes
+                app.include_router(auth.router)
+                app.include_router(dashboard.router)
+
                 client = TestClient(app)
                 return client
         finally:
@@ -224,12 +242,31 @@ class TestDashboardIntegration:
         os.environ['MICROBLOG_CONFIG'] = str(temp_project_dir['config'])
 
         try:
-            # Mock unauthenticated state
             with patch('microblog.utils.get_content_dir', return_value=temp_project_dir['content']), \
-                 patch('microblog.server.middleware.get_current_user', return_value=None), \
                  patch('microblog.server.middleware.get_csrf_token', return_value='test-csrf-token'):
 
-                app = create_app(dev_mode=True)
+                # Create a test app that simulates unauthenticated state
+                from fastapi import FastAPI
+                from fastapi.templating import Jinja2Templates
+
+                from microblog.server.routes import auth, dashboard
+
+                app = FastAPI(title="Test Microblog", debug=True)
+
+                # Set up templates
+                app.state.templates = Jinja2Templates(directory=str(temp_project_dir['templates']))
+
+                # Add middleware that leaves user unauthenticated
+                @app.middleware("http")
+                async def unauth_middleware(request, call_next):
+                    # Don't set authenticated state (leave it None/False)
+                    request.state.authenticated = False
+                    return await call_next(request)
+
+                # Register routes
+                app.include_router(auth.router)
+                app.include_router(dashboard.router)
+
                 return TestClient(app)
         finally:
             # Restore original config

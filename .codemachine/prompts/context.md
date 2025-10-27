@@ -68,6 +68,51 @@ The following are the relevant sections from the architecture and plan documents
     *   **Build Output Validation**: Generated HTML validation, link checking, and asset verification
 ```
 
+### Context: task-i4-t8 (from 02_Iteration_I4.md)
+
+```markdown
+    <!-- anchor: task-i4-t8 -->
+    *   **Task 4.8:**
+        *   **Task ID:** `I4.T8`
+        *   **Description:** Create integration tests for dashboard functionality including authentication flows, post management operations, and form submissions. Test complete user workflows.
+        *   **Agent Type Hint:** `TestingAgent`
+        *   **Inputs:** Dashboard implementation, user workflow requirements, integration testing patterns
+        *   **Input Files:** ["microblog/server/app.py", "microblog/server/routes/dashboard.py", "tests/conftest.py"]
+        *   **Target Files:** ["tests/integration/test_dashboard.py", "tests/integration/test_auth_flows.py"]
+        *   **Deliverables:** Integration test suite for dashboard functionality and user workflows
+        *   **Acceptance Criteria:** All dashboard routes tested, authentication flows verified, form submissions tested, user workflows covered, test coverage >80%
+        *   **Dependencies:** `I4.T6`, `I4.T7`
+        *   **Parallelizable:** Yes
+```
+
+### Context: project-overview (from 01_Plan_Overview_and_Setup.md)
+
+```markdown
+## 1. Project Overview
+
+*   **Goal:** Develop a lightweight, self-hosted blogging platform that generates static HTML pages for performance while providing a dynamic HTMX-powered dashboard for content management.
+*   **High-Level Requirements Summary:**
+    *   Single-user authentication with JWT-based session management
+    *   Markdown-based post creation and editing with YAML frontmatter
+    *   Static site generation with full rebuild strategy (<5s for 100 posts)
+    *   HTMX-enhanced dashboard for CRUD operations without full page refreshes
+    *   Filesystem-based image storage with automatic build-time copying
+    *   Tag-based content organization and RSS feed generation
+    *   CLI tools for build, serve, and user management operations
+    *   Build backup and atomic rollback mechanisms for reliability
+    *   Configuration hot-reload in development mode
+    *   Live markdown preview during content editing
+*   **Key Assumptions:**
+    *   Single-user design eliminates complex permission systems
+    *   Content volume will not exceed 1,000 posts (performance tested)
+    *   Users have basic familiarity with markdown syntax
+    *   Full rebuild strategy is acceptable for target content volume
+    *   Users will implement their own content backup strategy (Git recommended)
+    *   Dashboard usage occurs on trusted networks (localhost or VPN)
+    *   Images are pre-optimized before upload (no automatic compression)
+    *   Filesystem has sufficient read/write permissions for operations
+```
+
 ### Context: directory-structure (from 01_Plan_Overview_and_Setup.md)
 
 ```markdown
@@ -170,23 +215,6 @@ microblog/
 ~~~
 ```
 
-### Context: task-i4-t8 (from 02_Iteration_I4.md)
-
-```markdown
-<!-- anchor: task-i4-t8 -->
-*   **Task 4.8:**
-    *   **Task ID:** `I4.T8`
-    *   **Description:** Create integration tests for dashboard functionality including authentication flows, post management operations, and form submissions. Test complete user workflows.
-    *   **Agent Type Hint:** `TestingAgent`
-    *   **Inputs:** Dashboard implementation, user workflow requirements, integration testing patterns
-    *   **Input Files:** ["microblog/server/app.py", "microblog/server/routes/dashboard.py", "tests/conftest.py"]
-    *   **Target Files:** ["tests/integration/test_dashboard.py", "tests/integration/test_auth_flows.py"]
-    *   **Deliverables:** Integration test suite for dashboard functionality and user workflows
-    *   **Acceptance Criteria:** All dashboard routes tested, authentication flows verified, form submissions tested, user workflows covered, test coverage >80%
-    *   **Dependencies:** `I4.T6`, `I4.T7`
-    *   **Parallelizable:** Yes
-```
-
 ---
 
 ## 3. Codebase Analysis & Strategic Guidance
@@ -196,42 +224,37 @@ The following analysis is based on my direct review of the current codebase. Use
 ### Relevant Existing Code
 
 *   **File:** `tests/conftest.py`
-    *   **Summary:** Provides comprehensive test fixtures including temporary config files, valid/invalid configuration data, content directories, and mock callbacks. This is your foundation for test setup.
-    *   **Recommendation:** You MUST reuse the existing fixtures like `valid_config_data`, `temp_config_file`, and `temp_content_dir` to maintain consistency with other tests.
-
-*   **File:** `tests/integration/test_dashboard.py`
-    *   **Summary:** Already contains a comprehensive integration test suite for dashboard functionality with 666 lines of well-structured tests covering authentication, CRUD operations, error handling, and complete workflows.
-    *   **Recommendation:** This file is ALREADY IMPLEMENTED and covers the target requirements. Review it carefully to ensure all acceptance criteria are met.
-
-*   **File:** `tests/integration/test_auth_flows.py`
-    *   **Summary:** Already contains a comprehensive authentication flow test suite with 672 lines covering login/logout workflows, JWT cookie handling, CSRF protection, session management, and API endpoints.
-    *   **Recommendation:** This file is ALREADY IMPLEMENTED and covers authentication flows completely. Review it to ensure all authentication requirements are satisfied.
+    *   **Summary:** This file contains comprehensive shared test fixtures including temporary config files, mock configuration data, content directories, and test utilities. It provides excellent patterns for creating test environments.
+    *   **Recommendation:** You MUST reuse the existing fixtures from this file, especially `valid_config_data`, `temp_config_file`, and `temp_content_dir`. The mock callback pattern is also useful for testing configuration reloading.
 
 *   **File:** `microblog/server/app.py`
-    *   **Summary:** FastAPI application factory that creates configured app instances with middleware, routes, and templates. Provides both dev and production configurations.
-    *   **Recommendation:** You SHOULD use the `create_app(dev_mode=True)` function in your tests to get properly configured application instances.
+    *   **Summary:** This file contains the FastAPI application factory with complete middleware setup, route registration, and startup/shutdown event handlers. It includes security headers, CSRF protection, authentication middleware, and development mode configuration.
+    *   **Recommendation:** You SHOULD import and use the `create_app()` function from this file for creating test application instances. The application factory pattern is already implemented correctly with dev_mode support.
 
 *   **File:** `microblog/server/routes/dashboard.py`
-    *   **Summary:** Dashboard routes providing main interface, post listings, CRUD operations, and API endpoints for post management. Contains comprehensive error handling and validation.
-    *   **Recommendation:** Your tests MUST cover all the routes defined here including `/dashboard/`, `/dashboard/posts`, `/dashboard/posts/new`, `/dashboard/posts/{slug}/edit`, `/dashboard/settings`, `/dashboard/pages`, and the API endpoints `/dashboard/api/posts`.
+    *   **Summary:** This file implements all dashboard routes including dashboard home, posts listing, post editing forms, settings, and API endpoints for post creation/updating. It uses proper authentication middleware integration and error handling.
+    *   **Recommendation:** You MUST test all the routes defined in this file. Pay special attention to the API endpoints `/api/posts` and `/api/posts/{slug}` which handle form submissions. The error handling patterns and authentication checks should be thoroughly tested.
+
+*   **File:** `tests/integration/test_dashboard.py`
+    *   **Summary:** This file already contains extensive integration tests for dashboard functionality including authentication mocking, template creation, post service mocking, and complete workflow testing. It demonstrates excellent testing patterns.
+    *   **Recommendation:** You SHOULD examine the existing test patterns carefully. The file shows how to mock authentication, create temporary project directories, set up templates, and test complete workflows. The test structure is well-organized and comprehensive.
+
+*   **File:** `tests/integration/test_auth_flows.py`
+    *   **Summary:** This file contains comprehensive authentication flow testing including login/logout workflows, CSRF protection, JWT token handling, session management, and security validation. It demonstrates proper authentication testing patterns.
+    *   **Recommendation:** You SHOULD review the authentication testing patterns. The file shows excellent examples of mocking authentication components, testing security features, and validating complete authentication workflows.
 
 ### Implementation Tips & Notes
 
-*   **Tip:** The integration tests are ALREADY FULLY IMPLEMENTED in both target files. The task appears to be complete based on the codebase review. Both files contain comprehensive test coverage that exceeds the 80% requirement.
+*   **Tip:** I found that both target test files already exist and contain comprehensive test suites. The tests are well-structured and cover the major functionality. However, you should review them for completeness against the acceptance criteria.
 
-*   **Note:** The existing tests use sophisticated mocking patterns with `unittest.mock.patch` to isolate the dashboard functionality and test it independently. This is the correct approach for integration testing.
+*   **Note:** The existing tests use extensive mocking with `unittest.mock.patch` to isolate components and avoid database dependencies. This pattern should be continued for any additional tests you write.
 
-*   **Warning:** The tests use temporary directories and mock the content directory location using `patch('microblog.utils.get_content_dir')`. You MUST maintain this pattern if you modify any tests.
+*   **Warning:** The tests require proper environment setup with `MICROBLOG_CONFIG` environment variable and mocked `get_content_dir()` function. Make sure to follow the existing patterns for environment setup to avoid test failures.
 
-*   **Security Testing:** The existing tests already cover CSRF protection, authentication middleware, JWT cookie security attributes (HttpOnly, Secure, SameSite), and API authentication requirements.
+*   **Tip:** The test files show excellent examples of testing complete user workflows, including multi-step processes like post creation → editing → publishing. The task requires testing "complete user workflows" so ensure these patterns are comprehensive.
 
-*   **Coverage Analysis:** Based on the comprehensive test suites, the acceptance criteria of ">80% test coverage" should be easily met. The tests cover:
-    - All dashboard routes and templates
-    - Complete authentication workflows
-    - API endpoint functionality
-    - Form submissions and validation
-    - Error handling scenarios
-    - Security features (CSRF, JWT)
-    - Complete user workflows from login to logout
+*   **Note:** The existing tests achieve good coverage of authentication flows, dashboard routes, form submissions, and error handling. Pay special attention to CSRF protection testing and authentication requirement validation.
 
-*   **Recommendation:** Since the integration tests appear to be already complete and comprehensive, you should verify they are working by running them with pytest and checking if they meet all acceptance criteria. If there are any gaps, address them specifically rather than rewriting the entire test suite.
+*   **Tip:** The test fixtures in `conftest.py` provide excellent utilities for creating temporary project structures, configuration files, and mock data. These should be reused extensively in your tests.
+
+*   **Note:** Since the acceptance criteria requires ">80% test coverage", you should ensure that any gaps in the existing test coverage are filled. Focus on edge cases, error conditions, and integration points between components.

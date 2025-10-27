@@ -7,7 +7,6 @@ the main dashboard view, post listing, and statistics display with HTMX support.
 
 import logging
 from datetime import datetime
-from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -26,9 +25,7 @@ logger = logging.getLogger(__name__)
 # Initialize router
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
-# Initialize templates
-project_root = Path(__file__).parent.parent.parent.parent
-templates = Jinja2Templates(directory=str(project_root / "templates"))
+# Templates will be accessed from app.state.templates
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -65,7 +62,7 @@ async def dashboard_home(request: Request):
 
         logger.info(f"Dashboard accessed by user {user['username']}")
 
-        return templates.TemplateResponse(
+        return request.app.state.templates.TemplateResponse(
             "dashboard/home.html",
             {
                 "request": request,
@@ -115,7 +112,7 @@ async def posts_list(request: Request):
 
         logger.info(f"Posts list accessed by user {user['username']}, showing {len(all_posts)} posts")
 
-        return templates.TemplateResponse(
+        return request.app.state.templates.TemplateResponse(
             "dashboard/posts_list.html",
             {
                 "request": request,
@@ -147,7 +144,7 @@ async def new_post(request: Request):
     user = get_current_user(request)
     csrf_token = get_csrf_token(request)
 
-    return templates.TemplateResponse(
+    return request.app.state.templates.TemplateResponse(
         "dashboard/post_edit.html",
         {
             "request": request,
@@ -184,7 +181,7 @@ async def edit_post(request: Request, slug: str):
 
         logger.info(f"Edit post form accessed for '{slug}' by user {user['username']}")
 
-        return templates.TemplateResponse(
+        return request.app.state.templates.TemplateResponse(
             "dashboard/post_edit.html",
             {
                 "request": request,
@@ -214,7 +211,7 @@ async def settings(request: Request):
     user = get_current_user(request)
     csrf_token = get_csrf_token(request)
 
-    return templates.TemplateResponse(
+    return request.app.state.templates.TemplateResponse(
         "dashboard/settings.html",
         {
             "request": request,
@@ -240,7 +237,7 @@ async def pages_list(request: Request):
 
     # For now, just show a placeholder page
     # This will be implemented in future iterations
-    return templates.TemplateResponse(
+    return request.app.state.templates.TemplateResponse(
         "dashboard/pages_list.html",
         {
             "request": request,

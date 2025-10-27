@@ -24,8 +24,7 @@ from microblog.utils import get_content_dir
 # Initialize router
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
-# Initialize templates
-templates = Jinja2Templates(directory=str(get_content_dir() / "templates"))
+# Templates will be accessed from app.state.templates
 
 
 class LoginRequest(BaseModel):
@@ -57,7 +56,7 @@ async def login_page(request: Request):
     # Get CSRF token for the form
     csrf_token = get_csrf_token(request)
 
-    return templates.TemplateResponse(
+    return request.app.state.templates.TemplateResponse(
         "auth/login.html",
         {
             "request": request,
@@ -113,7 +112,7 @@ async def login(
     if not user or not verify_password(password, user.password_hash):
         # Return error for invalid credentials
         csrf_token = get_csrf_token(request)
-        return templates.TemplateResponse(
+        return request.app.state.templates.TemplateResponse(
             "auth/login.html",
             {
                 "request": request,
@@ -262,7 +261,7 @@ async def logout_get(request: Request):
     # Generate logout form with CSRF token
     csrf_token = get_csrf_token(request)
 
-    return templates.TemplateResponse(
+    return request.app.state.templates.TemplateResponse(
         "auth/logout.html",
         {
             "request": request,

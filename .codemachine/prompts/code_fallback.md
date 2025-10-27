@@ -12,24 +12,32 @@ Create integration tests for dashboard functionality including authentication fl
 
 ## Issues Detected
 
-*   **Template Resolution Issue:** The integration tests are failing because the dashboard routes are hardcoded to load templates from the project root `templates` directory, but the test fixtures are creating temporary templates in a different location. This causes "template not found" errors during test execution.
+*   **Authentication Middleware Missing:** The integration tests are creating custom FastAPI applications without the proper `AuthenticationMiddleware`. This causes dashboard routes to fail with 500 errors instead of redirecting unauthenticated users to login as expected.
 
-*   **Template Mocking Problem:** The test fixtures in both `test_dashboard.py` and `test_auth_flows.py` create temporary templates in the content directory structure, but the `Jinja2Templates` initialization in `microblog/server/routes/dashboard.py` uses a hardcoded path that doesn't get mocked properly.
+*   **Test Coverage Below Requirement:** Current test coverage is only 13-22%, well below the required >80%. The tests are not running correctly due to middleware issues, preventing proper coverage measurement.
 
-*   **Integration Test Coverage:** While the tests are comprehensive in structure, they fail to execute successfully due to the template loading issue, preventing proper validation of the dashboard and authentication workflows.
+*   **Improper Test Application Setup:** Both `test_dashboard.py` and `test_auth_flows.py` create custom FastAPI apps instead of using the `create_app()` function from `microblog.server.app` which includes all necessary middleware (AuthenticationMiddleware, CSRFProtectionMiddleware, SecurityHeadersMiddleware).
+
+*   **Template Response API Usage:** Tests show deprecation warnings for `TemplateResponse` API usage - the first parameter should be the `Request` instance, not the template name.
 
 ---
 
 ## Best Approach to Fix
 
-You MUST modify the template initialization in the dashboard routes to be mockable during testing. The current hardcoded approach in `microblog/server/routes/dashboard.py` line 31 needs to be replaced with a configuration-based or injectable approach that can be properly mocked in tests.
+You MUST modify the test fixtures to use the proper `create_app()` function instead of creating custom FastAPI applications. The current approach bypasses all the essential middleware that makes the application work correctly.
 
-Options to fix this:
+1. **Update test fixtures:** Replace the custom FastAPI app creation in test fixtures with `create_app(dev_mode=True)` from `microblog.server.app`
 
-1. **Modify dashboard.py**: Replace the hardcoded template directory with a configurable path that can be overridden during testing
-2. **Update test fixtures**: Mock the `templates` object directly in the dashboard routes module instead of trying to mock the template directory path
-3. **Create template factory**: Use a template factory function that can be easily mocked during testing
+2. **Mock authentication properly:** Instead of bypassing authentication middleware, mock the JWT verification and user retrieval functions at the appropriate level
 
-The same issue likely exists in other route modules that use templates, so ensure a consistent approach across all route modules.
+3. **Fix template configuration:** Ensure the test environment properly sets up the template directory so the app can find the templates
 
-After fixing the template loading issue, re-run the integration tests to verify they pass and achieve the required >80% test coverage.
+4. **Use proper mocking strategy:** Mock the authentication components (`verify_jwt_token`, `get_current_user`) instead of creating custom middleware
+
+The authentication middleware expects:
+- `/dashboard` paths to be protected
+- Unauthenticated users redirected to `/auth/login`
+- JWT tokens to be validated from cookies
+- Request state to be properly set
+
+After fixing the middleware setup, re-run the tests to verify they pass and achieve the required >80% test coverage.

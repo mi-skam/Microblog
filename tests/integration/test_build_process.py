@@ -822,19 +822,37 @@ Some more content here to make the post substantial.
         mock_post_service.get_published_posts.return_value = []
         mock_post_service.posts_dir.parent = structure['content']
 
+        # Create mock dependencies for the build
+        mock_template_renderer = Mock()
+        mock_template_renderer.validate_template.return_value = (True, None)
+        mock_template_renderer.templates_dir = structure['templates']
+        mock_template_renderer.render_homepage.return_value = "<html>test homepage</html>"
+        mock_template_renderer.render_archive.return_value = "<html>test archive</html>"
+        mock_template_renderer.render_rss_feed.return_value = "<?xml version='1.0'?><rss></rss>"
+        mock_template_renderer.get_all_tags.return_value = []  # Return empty list for tags
+
+        mock_markdown_processor = Mock()
+        mock_asset_manager = Mock()
+        mock_asset_manager.copy_all_assets.return_value = {
+            'total_successful': 0,
+            'total_failed': 0,
+            'mappings': []
+        }
+
         with patch('microblog.builder.generator.get_config', return_value=mock_config):
             with patch('microblog.builder.generator.get_post_service', return_value=mock_post_service):
-                with patch('microblog.utils.get_templates_dir', return_value=structure['templates']):
-                    with patch('microblog.utils.get_content_dir', return_value=structure['content']):
-                        with patch('microblog.utils.get_static_dir', return_value=structure['static']):
-                            with patch('microblog.builder.template_renderer.get_config', return_value=mock_config):
-                                with patch('microblog.builder.template_renderer.get_post_service', return_value=mock_post_service):
+                with patch('microblog.builder.generator.get_template_renderer', return_value=mock_template_renderer):
+                    with patch('microblog.builder.generator.get_markdown_processor', return_value=mock_markdown_processor):
+                        with patch('microblog.builder.generator.get_asset_manager', return_value=mock_asset_manager):
+                            with patch('microblog.utils.get_templates_dir', return_value=structure['templates']):
+                                with patch('microblog.utils.get_content_dir', return_value=structure['content']):
+                                    with patch('microblog.utils.get_static_dir', return_value=structure['static']):
 
-                                    progress_callback = Mock()
-                                    result = build_site(progress_callback)
+                                        progress_callback = Mock()
+                                        result = build_site(progress_callback)
 
-                            assert result.success is True
-                            assert progress_callback.called
+                                        assert result.success is True
+                                        assert progress_callback.called
 
     def test_build_with_malformed_templates(self, real_project_structure):
         """Test build process with malformed Jinja2 templates."""

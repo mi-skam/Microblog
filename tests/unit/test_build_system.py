@@ -15,6 +15,7 @@ import pytest
 
 from microblog.builder.asset_manager import (
     AssetManager,
+    AssetManagingError,
     get_asset_manager,
 )
 from microblog.builder.generator import (
@@ -320,6 +321,258 @@ This is a test post."""
         assert any("Empty link URL" in warning for warning in warnings)
         assert any("Empty link text" in warning for warning in warnings)
 
+    def test_process_file_content_with_frontmatter(self):
+        """Test processing complete file content with frontmatter."""
+        processor = MarkdownProcessor()
+
+        file_content = """---
+title: Test Post
+date: 2023-01-01
+tags:
+  - test
+---
+
+# Test Content
+
+This is a test post."""
+
+        frontmatter, html = processor.process_file_content(file_content)
+
+        assert frontmatter['title'] == "Test Post"
+        assert frontmatter['tags'] == ['test']
+        assert "<h2" in html  # Due to baselevel=2 in TOC config
+        assert "Test Content" in html
+
+    def test_process_file_content_error_handling(self):
+        """Test error handling in process_file_content."""
+        processor = MarkdownProcessor()
+
+        # Mock _parse_frontmatter to raise an exception
+        processor._parse_frontmatter = Mock(side_effect=Exception("Parse error"))
+
+        with pytest.raises(MarkdownProcessingError, match="Failed to process file content"):
+            processor.process_file_content("invalid content")
+
+    def test_validate_and_process_success(self):
+        """Test successful validation and processing."""
+        processor = MarkdownProcessor()
+
+        frontmatter_data = {
+            'title': 'Test Post',
+            'date': date(2023, 1, 1),
+            'tags': ['test']
+        }
+        content = "# Test Content\n\nThis is a test."
+
+        post, html = processor.validate_and_process(frontmatter_data, content)
+
+        assert post.frontmatter.title == "Test Post"
+        assert "<h2" in html  # Due to baselevel=2 in TOC config
+        assert "Test Content" in html
+
+    def test_validate_and_process_validation_error(self):
+        """Test validation error in validate_and_process."""
+        processor = MarkdownProcessor()
+
+        # Invalid frontmatter data (missing required fields)
+        frontmatter_data = {}
+        content = "# Test Content"
+
+        with pytest.raises(MarkdownProcessingError, match="Post validation failed"):
+            processor.validate_and_process(frontmatter_data, content)
+
+    def test_validate_and_process_processing_error(self):
+        """Test processing error in validate_and_process."""
+        processor = MarkdownProcessor()
+
+        frontmatter_data = {
+            'title': 'Test Post',
+            'date': date(2023, 1, 1),
+            'tags': ['test']
+        }
+        content = "# Test Content"
+
+        # Mock process_content to raise an exception
+        processor.process_content = Mock(side_effect=Exception("Processing error"))
+
+        with pytest.raises(MarkdownProcessingError, match="Failed to validate and process post"):
+            processor.validate_and_process(frontmatter_data, content)
+
+    def test_parse_frontmatter_missing_frontmatter(self):
+        """Test parsing file with missing frontmatter."""
+        processor = MarkdownProcessor()
+
+        file_content = "# Just Content\n\nNo frontmatter here."
+
+        with pytest.raises(MarkdownProcessingError, match="missing YAML frontmatter"):
+            processor._parse_frontmatter(file_content)
+
+    def test_parse_frontmatter_yaml_error(self):
+        """Test YAML parsing error."""
+        processor = MarkdownProcessor()
+
+        file_content = """---
+title: Test Post
+invalid_yaml: [unclosed bracket
+---
+
+# Content"""
+
+        with pytest.raises(MarkdownProcessingError, match="YAML parsing error"):
+            processor._parse_frontmatter(file_content)
+
+    def test_parse_frontmatter_empty_frontmatter(self):
+        """Test parsing file with empty frontmatter."""
+        processor = MarkdownProcessor()
+
+        file_content = """---
+
+---
+
+# Content Only"""
+
+        frontmatter, content = processor._parse_frontmatter(file_content)
+
+        assert frontmatter == {}
+        assert "# Content Only" in content
+
+    def test_parse_frontmatter_date_conversion(self):
+        """Test automatic date string conversion."""
+        processor = MarkdownProcessor()
+
+        file_content = """---
+title: Test Post
+date: "2023-01-01"
+---
+
+# Content"""
+
+        frontmatter, content = processor._parse_frontmatter(file_content)
+
+        assert frontmatter['title'] == "Test Post"
+        assert isinstance(frontmatter['date'], date)
+        assert frontmatter['date'] == date(2023, 1, 1)
+
+    def test_parse_frontmatter_exception_handling(self):
+        """Test general exception handling in parse_frontmatter."""
+        processor = MarkdownProcessor()
+
+        file_content = """---
+title: Test Post
+---
+
+# Content"""
+
+        # Mock yaml.safe_load to raise a non-YAML exception
+        with patch('yaml.safe_load', side_effect=RuntimeError("Unexpected error")):
+            with pytest.raises(MarkdownProcessingError, match="Failed to parse frontmatter"):
+                processor._parse_frontmatter(file_content)
+
+    def test_get_toc_available(self):
+        """Test getting table of contents when available."""
+        processor = MarkdownProcessor()
+
+        # Process content to generate TOC
+        content = "# Header 1\n\n## Header 2\n\nContent here."
+        processor.process_markdown_text(content)
+
+        toc = processor.get_toc()
+        assert isinstance(toc, str)
+        # TOC should contain some HTML structure
+
+    def test_get_toc_not_available(self):
+        """Test getting TOC when not available."""
+        processor = MarkdownProcessor()
+
+        # Mock markdown instance without toc attribute
+        processor.markdown_instance = Mock(spec=[])  # No toc attribute
+
+        toc = processor.get_toc()
+        assert toc == ""
+
+    def test_get_toc_tokens_available(self):
+        """Test getting TOC tokens when available."""
+        processor = MarkdownProcessor()
+
+        # Process content to generate TOC tokens
+        content = "# Header 1\n\n## Header 2\n\nContent here."
+        processor.process_markdown_text(content)
+
+        toc_tokens = processor.get_toc_tokens()
+        assert isinstance(toc_tokens, list)
+
+    def test_get_toc_tokens_not_available(self):
+        """Test getting TOC tokens when not available."""
+        processor = MarkdownProcessor()
+
+        # Mock markdown instance without toc_tokens attribute
+        processor.markdown_instance = Mock(spec=[])  # No toc_tokens attribute
+
+        toc_tokens = processor.get_toc_tokens()
+        assert toc_tokens == []
+
+    def test_validate_content_structure_exception_handling(self):
+        """Test exception handling in content structure validation."""
+        processor = MarkdownProcessor()
+
+        # Create content that might cause issues during processing
+        content = "Valid content"
+
+        # Mock the re.findall to raise an exception
+        with patch('re.findall', side_effect=RuntimeError("Regex error")):
+            warnings = processor.validate_content_structure(content)
+
+        assert len(warnings) == 1
+        assert "Error during content validation" in warnings[0]
+
+    def test_validate_content_structure_line_number_reporting(self):
+        """Test that line numbers are correctly reported in warnings."""
+        processor = MarkdownProcessor()
+
+        content = """Line 1
+[Empty URL]() on line 2
+Line 3
+[](http://example.com) on line 4
+Line 5"""
+
+        warnings = processor.validate_content_structure(content)
+
+        # Check that line numbers are reported
+        assert any("line 2" in warning for warning in warnings)
+        assert any("line 4" in warning for warning in warnings)
+
+    def test_create_markdown_instance_configuration(self):
+        """Test that markdown instance is configured correctly."""
+        processor = MarkdownProcessor()
+
+        # Check that extensions are loaded
+        assert processor.markdown_instance is not None
+
+        # Test that some extensions are working by processing content that uses them
+        test_content = """
+# Header with TOC
+
+```python
+def test():
+    return True
+```
+
+| Column 1 | Column 2 |
+|----------|----------|
+| Data 1   | Data 2   |
+
+- [x] Task item
+- [ ] Incomplete task
+"""
+
+        result = processor.process_markdown_text(test_content)
+
+        # Should contain elements from various extensions
+        assert "<h2" in result  # TOC extension (baselevel=2)
+        assert "<table>" in result  # Tables extension
+        assert "highlight" in result  # Code highlighting
+        assert 'class="task-list' in result or 'type="checkbox"' in result  # Task list extension
+
 
 class TestTemplateRenderer:
     """Test TemplateRenderer functionality."""
@@ -550,6 +803,200 @@ class TestTemplateRenderer:
                 with pytest.raises(TemplateRenderingError, match="Failed to render template"):
                     renderer.render_template('index.html')
 
+    def test_rfc2822_filter(self, temp_templates_dir, mock_config):
+        """Test RFC2822 date format filter."""
+        with patch('microblog.builder.template_renderer.get_config', return_value=mock_config):
+            with patch('microblog.builder.template_renderer.get_post_service'):
+                renderer = TemplateRenderer(temp_templates_dir)
+
+                from datetime import datetime
+                test_datetime = datetime(2023, 12, 25, 15, 30, 45)
+                rfc_formatted = renderer._format_rfc2822(test_datetime)
+
+                # Should be in format like "Mon, 25 Dec 2023 15:30:45 +0000"
+                assert "25 Dec 2023" in rfc_formatted
+                assert "15:30:45" in rfc_formatted
+
+    def test_create_excerpt_no_truncation(self, temp_templates_dir, mock_config):
+        """Test excerpt creation with short content."""
+        with patch('microblog.builder.template_renderer.get_config', return_value=mock_config):
+            with patch('microblog.builder.template_renderer.get_post_service'):
+                renderer = TemplateRenderer(temp_templates_dir)
+
+                short_content = "Short content."
+                excerpt = renderer._create_excerpt(short_content, 100)
+
+                assert excerpt == short_content
+                assert not excerpt.endswith("...")
+
+    def test_create_excerpt_html_stripping(self, temp_templates_dir, mock_config):
+        """Test excerpt creation strips HTML tags."""
+        with patch('microblog.builder.template_renderer.get_config', return_value=mock_config):
+            with patch('microblog.builder.template_renderer.get_post_service'):
+                renderer = TemplateRenderer(temp_templates_dir)
+
+                html_content = "<p>This is <strong>bold</strong> content with <a href='#'>links</a>.</p>"
+                excerpt = renderer._create_excerpt(html_content, 100)
+
+                assert "<p>" not in excerpt
+                assert "<strong>" not in excerpt
+                assert "<a href=" not in excerpt
+                assert "bold" in excerpt
+                assert "links" in excerpt
+
+    def test_render_homepage_with_posts(self, temp_templates_dir, mock_config):
+        """Test homepage rendering with posts."""
+        # Use mock objects instead of real PostContent to avoid computed_slug issues
+        mock_post = Mock()
+        mock_post.frontmatter.title = "Test Post"
+        mock_post.frontmatter.date = date(2023, 1, 1)
+        mock_post.frontmatter.tags = ["test"]
+        mock_post.computed_slug = "test-post"
+        mock_post.pub_date = datetime(2023, 1, 1, 10, 0, 0)
+
+        mock_post_service = Mock()
+        mock_post_service.get_published_posts.return_value = [mock_post]
+
+        with patch('microblog.builder.template_renderer.get_config', return_value=mock_config):
+            with patch('microblog.builder.template_renderer.get_post_service', return_value=mock_post_service):
+                renderer = TemplateRenderer(temp_templates_dir)
+
+                html = renderer.render_homepage()
+
+                assert "Test Blog" in html
+                assert "Test Post" in html
+                assert "January 01, 2023" in html
+
+    def test_render_homepage_error_handling(self, temp_templates_dir, mock_config):
+        """Test homepage rendering error handling."""
+        mock_post_service = Mock()
+        mock_post_service.get_published_posts.side_effect = Exception("Service error")
+
+        with patch('microblog.builder.template_renderer.get_config', return_value=mock_config):
+            with patch('microblog.builder.template_renderer.get_post_service', return_value=mock_post_service):
+                renderer = TemplateRenderer(temp_templates_dir)
+
+                with pytest.raises(TemplateRenderingError, match="Failed to render homepage"):
+                    renderer.render_homepage()
+
+    def test_render_archive_error_handling(self, temp_templates_dir, mock_config):
+        """Test archive rendering error handling."""
+        mock_post_service = Mock()
+        mock_post_service.get_published_posts.side_effect = Exception("Service error")
+
+        with patch('microblog.builder.template_renderer.get_config', return_value=mock_config):
+            with patch('microblog.builder.template_renderer.get_post_service', return_value=mock_post_service):
+                renderer = TemplateRenderer(temp_templates_dir)
+
+                with pytest.raises(TemplateRenderingError, match="Failed to render archive"):
+                    renderer.render_archive()
+
+    def test_render_rss_feed_error_handling(self, temp_templates_dir, mock_config):
+        """Test RSS feed rendering error handling."""
+        mock_post_service = Mock()
+        mock_post_service.get_published_posts.side_effect = Exception("Service error")
+
+        with patch('microblog.builder.template_renderer.get_config', return_value=mock_config):
+            with patch('microblog.builder.template_renderer.get_post_service', return_value=mock_post_service):
+                renderer = TemplateRenderer(temp_templates_dir)
+
+                with pytest.raises(TemplateRenderingError, match="Failed to render RSS feed"):
+                    renderer.render_rss_feed()
+
+    def test_render_template_with_context(self, temp_templates_dir, mock_config):
+        """Test template rendering with custom context."""
+        with patch('microblog.builder.template_renderer.get_config', return_value=mock_config):
+            with patch('microblog.builder.template_renderer.get_post_service'):
+                renderer = TemplateRenderer(temp_templates_dir)
+
+                custom_context = {'custom_var': 'test_value'}
+                html = renderer.render_template('index.html', custom_context)
+
+                assert "Test Blog" in html  # From config
+
+    def test_render_post_error_handling(self, temp_templates_dir, mock_config):
+        """Test post rendering error handling."""
+        with patch('microblog.builder.template_renderer.get_config', return_value=mock_config):
+            with patch('microblog.builder.template_renderer.get_post_service'):
+                renderer = TemplateRenderer(temp_templates_dir)
+
+                frontmatter = PostFrontmatter(
+                    title="Test Post",
+                    date=date(2023, 1, 1),
+                    tags=["test"]
+                )
+                post = PostContent(frontmatter=frontmatter, content="Test content")
+
+                # Mock template rendering to fail
+                renderer.env.get_template = Mock(side_effect=Exception("Template error"))
+
+                with pytest.raises(TemplateRenderingError, match="Failed to render post"):
+                    renderer.render_post(post, "<p>Content</p>")
+
+    def test_environment_setup(self, temp_templates_dir, mock_config):
+        """Test Jinja2 environment setup."""
+        with patch('microblog.builder.template_renderer.get_config', return_value=mock_config):
+            with patch('microblog.builder.template_renderer.get_post_service'):
+                renderer = TemplateRenderer(temp_templates_dir)
+
+                # Check that custom filters are registered
+                assert 'dateformat' in renderer.env.filters
+                assert 'rfc2822' in renderer.env.filters
+                assert 'excerpt' in renderer.env.filters
+
+                # Check that autoescape function exists (not a boolean in Jinja2)
+                assert callable(renderer.env.autoescape)
+
+    def test_invalid_template_directory(self, mock_config):
+        """Test initialization with invalid template directory."""
+        nonexistent_dir = Path("/nonexistent/templates")
+
+        with patch('microblog.builder.template_renderer.get_config', return_value=mock_config):
+            with patch('microblog.builder.template_renderer.get_post_service'):
+                # Should not raise an exception during initialization
+                renderer = TemplateRenderer(nonexistent_dir)
+
+                # But should fail when trying to validate templates
+                is_valid, error = renderer.validate_template('index.html')
+                assert is_valid is False
+                assert error is not None
+
+    def test_get_base_context(self, temp_templates_dir, mock_config):
+        """Test _get_base_context method."""
+        with patch('microblog.builder.template_renderer.get_config', return_value=mock_config):
+            with patch('microblog.builder.template_renderer.get_post_service'):
+                renderer = TemplateRenderer(temp_templates_dir)
+
+                context = renderer._get_base_context()
+
+                assert 'site' in context
+                assert context['site']['title'] == "Test Blog"
+                assert context['site']['url'] == "https://test.example.com"
+                assert context['site']['author'] == "Test Author"
+                assert context['site']['description'] == "Test Description"
+                assert 'current_year' in context  # This is what's actually in the context
+
+    def test_template_render_with_template_error(self, temp_templates_dir, mock_config):
+        """Test template rendering when template has errors."""
+        # Create a template with syntax errors
+        (temp_templates_dir / "broken.html").write_text("""
+<!DOCTYPE html>
+<html>
+<head><title>{{ site.title }}</title></head>
+<body>
+{% if unclosed_block %}
+<h1>This block is never closed
+</body>
+</html>
+""")
+
+        with patch('microblog.builder.template_renderer.get_config', return_value=mock_config):
+            with patch('microblog.builder.template_renderer.get_post_service'):
+                renderer = TemplateRenderer(temp_templates_dir)
+
+                with pytest.raises(TemplateRenderingError):
+                    renderer.render_template('broken.html')
+
 
 class TestAssetManager:
     """Test AssetManager functionality."""
@@ -722,6 +1169,253 @@ class TestAssetManager:
                     assert 'total_files' in info
                     assert 'total_size' in info
                     assert info['total_files'] >= 3  # At least 3 valid files
+
+    def test_validate_file_non_existent(self, mock_config, temp_content_structure):
+        """Test file validation for non-existent file."""
+        with patch('microblog.builder.asset_manager.get_config', return_value=mock_config):
+            with patch('microblog.builder.asset_manager.get_content_dir', return_value=temp_content_structure['content']):
+                with patch('microblog.builder.asset_manager.get_static_dir', return_value=temp_content_structure['static']):
+                    manager = AssetManager()
+
+                    non_existent_file = temp_content_structure['content'] / "images" / "nonexistent.jpg"
+                    is_valid = manager.validate_file(non_existent_file)
+
+                    assert is_valid is False
+
+    def test_validate_file_directory(self, mock_config, temp_content_structure):
+        """Test file validation for directory (not a file)."""
+        with patch('microblog.builder.asset_manager.get_config', return_value=mock_config):
+            with patch('microblog.builder.asset_manager.get_content_dir', return_value=temp_content_structure['content']):
+                with patch('microblog.builder.asset_manager.get_static_dir', return_value=temp_content_structure['static']):
+                    manager = AssetManager()
+
+                    # Pass the directory itself instead of a file
+                    directory = temp_content_structure['content'] / "images"
+                    is_valid = manager.validate_file(directory)
+
+                    assert is_valid is False
+
+    def test_validate_file_mime_type_executable(self, mock_config, temp_content_structure):
+        """Test file validation for executable MIME type."""
+        with patch('microblog.builder.asset_manager.get_config', return_value=mock_config):
+            with patch('microblog.builder.asset_manager.get_content_dir', return_value=temp_content_structure['content']):
+                with patch('microblog.builder.asset_manager.get_static_dir', return_value=temp_content_structure['static']):
+                    manager = AssetManager()
+
+                    # Create a file with executable extension that might be allowed but has bad MIME type
+                    exec_file = temp_content_structure['content'] / "images" / "test.zip"
+                    exec_file.write_bytes(b"fake executable content")
+
+                    # Mock mimetypes to return executable MIME type
+                    with patch('mimetypes.guess_type', return_value=('application/x-executable', None)):
+                        is_valid = manager.validate_file(exec_file)
+
+                    assert is_valid is False
+
+    def test_validate_file_exception_handling(self, mock_config, temp_content_structure):
+        """Test file validation exception handling."""
+        with patch('microblog.builder.asset_manager.get_config', return_value=mock_config):
+            with patch('microblog.builder.asset_manager.get_content_dir', return_value=temp_content_structure['content']):
+                with patch('microblog.builder.asset_manager.get_static_dir', return_value=temp_content_structure['static']):
+                    manager = AssetManager()
+
+                    valid_file = temp_content_structure['content'] / "images" / "test.jpg"
+
+                    # Mock file.is_file() to raise an exception
+                    with patch.object(Path, 'is_file', side_effect=OSError("Permission denied")):
+                        is_valid = manager.validate_file(valid_file)
+
+                    assert is_valid is False
+
+    def test_calculate_file_hash_error(self, mock_config, temp_content_structure):
+        """Test file hash calculation error handling."""
+        with patch('microblog.builder.asset_manager.get_config', return_value=mock_config):
+            with patch('microblog.builder.asset_manager.get_content_dir', return_value=temp_content_structure['content']):
+                with patch('microblog.builder.asset_manager.get_static_dir', return_value=temp_content_structure['static']):
+                    manager = AssetManager()
+
+                    test_file = temp_content_structure['content'] / "images" / "test.jpg"
+
+                    # Mock open to raise an exception
+                    with patch('builtins.open', side_effect=OSError("File access denied")):
+                        hash_result = manager.calculate_file_hash(test_file)
+
+                    assert hash_result == ""
+
+    def test_needs_update_exception_handling(self, mock_config, temp_content_structure):
+        """Test needs_update exception handling."""
+        with patch('microblog.builder.asset_manager.get_config', return_value=mock_config):
+            with patch('microblog.builder.asset_manager.get_content_dir', return_value=temp_content_structure['content']):
+                with patch('microblog.builder.asset_manager.get_static_dir', return_value=temp_content_structure['static']):
+                    manager = AssetManager()
+
+                    source_file = temp_content_structure['content'] / "images" / "test.jpg"
+                    dest_file = temp_content_structure['build'] / "images" / "test.jpg"
+
+                    # Mock stat to raise an exception
+                    with patch.object(Path, 'stat', side_effect=OSError("Stat failed")):
+                        needs_update = manager.needs_update(source_file, dest_file)
+
+                    # Should default to True on error
+                    assert needs_update is True
+
+    def test_needs_update_same_size_different_time(self, mock_config, temp_content_structure):
+        """Test needs_update with similar times but different sizes."""
+        with patch('microblog.builder.asset_manager.get_config', return_value=mock_config):
+            with patch('microblog.builder.asset_manager.get_content_dir', return_value=temp_content_structure['content']):
+                with patch('microblog.builder.asset_manager.get_static_dir', return_value=temp_content_structure['static']):
+                    manager = AssetManager()
+
+                    source_file = temp_content_structure['content'] / "images" / "test.jpg"
+                    dest_file = temp_content_structure['build'] / "images" / "test.jpg"
+
+                    # Create destination file with different content (different size)
+                    dest_file.parent.mkdir(parents=True, exist_ok=True)
+                    dest_file.write_bytes(b"different content with different size")
+
+                    # Make times very close (within 1 second) but sizes different
+                    import os
+                    source_time = source_file.stat().st_mtime
+                    os.utime(dest_file, (source_time + 0.5, source_time + 0.5))  # 0.5 seconds difference
+
+                    needs_update = manager.needs_update(source_file, dest_file)
+
+                    assert needs_update is True
+
+    def test_copy_file_exception_handling(self, mock_config, temp_content_structure):
+        """Test copy_file exception handling."""
+        with patch('microblog.builder.asset_manager.get_config', return_value=mock_config):
+            with patch('microblog.builder.asset_manager.get_content_dir', return_value=temp_content_structure['content']):
+                with patch('microblog.builder.asset_manager.get_static_dir', return_value=temp_content_structure['static']):
+                    manager = AssetManager()
+
+                    source_file = temp_content_structure['content'] / "images" / "test.jpg"
+                    dest_file = temp_content_structure['build'] / "images" / "test.jpg"
+
+                    # Mock shutil.copy2 to raise an exception
+                    with patch('shutil.copy2', side_effect=OSError("Copy failed")):
+                        success = manager.copy_file(source_file, dest_file)
+
+                    assert success is False
+
+    def test_copy_directory_assets_nonexistent_source(self, mock_config, temp_content_structure):
+        """Test copying from non-existent source directory."""
+        with patch('microblog.builder.asset_manager.get_config', return_value=mock_config):
+            with patch('microblog.builder.asset_manager.get_content_dir', return_value=temp_content_structure['content']):
+                with patch('microblog.builder.asset_manager.get_static_dir', return_value=temp_content_structure['static']):
+                    manager = AssetManager()
+
+                    nonexistent_dir = temp_content_structure['content'] / "nonexistent"
+                    dest_dir = temp_content_structure['build'] / "nonexistent"
+
+                    successful, failed = manager.copy_directory_assets(nonexistent_dir, dest_dir)
+
+                    assert successful == 0
+                    assert failed == 0
+
+    def test_copy_directory_assets_exception_handling(self, mock_config, temp_content_structure):
+        """Test copy_directory_assets exception handling."""
+        with patch('microblog.builder.asset_manager.get_config', return_value=mock_config):
+            with patch('microblog.builder.asset_manager.get_content_dir', return_value=temp_content_structure['content']):
+                with patch('microblog.builder.asset_manager.get_static_dir', return_value=temp_content_structure['static']):
+                    manager = AssetManager()
+
+                    source_dir = temp_content_structure['content'] / "images"
+                    dest_dir = temp_content_structure['build'] / "images"
+
+                    # Mock rglob to raise an exception
+                    with patch.object(Path, 'rglob', side_effect=OSError("Permission denied")):
+                        successful, failed = manager.copy_directory_assets(source_dir, dest_dir)
+
+                    assert successful == 0
+                    assert failed == 1
+
+    def test_copy_all_assets_with_failures(self, mock_config, temp_content_structure):
+        """Test copy_all_assets with some failures."""
+        with patch('microblog.builder.asset_manager.get_config', return_value=mock_config):
+            with patch('microblog.builder.asset_manager.get_content_dir', return_value=temp_content_structure['content']):
+                with patch('microblog.builder.asset_manager.get_static_dir', return_value=temp_content_structure['static']):
+                    manager = AssetManager()
+
+                    # Mock copy_directory_assets to return some failures
+                    def mock_copy_directory_assets(source_dir, dest_dir):
+                        if 'images' in str(source_dir):
+                            return 1, 2  # 1 success, 2 failures
+                        return 0, 0
+
+                    with patch.object(manager, 'copy_directory_assets', side_effect=mock_copy_directory_assets):
+                        with pytest.raises(AssetManagingError, match="Failed to copy"):
+                            manager.copy_all_assets()
+
+    def test_copy_all_assets_exception(self, mock_config, temp_content_structure):
+        """Test copy_all_assets with exception during processing."""
+        with patch('microblog.builder.asset_manager.get_config', return_value=mock_config):
+            with patch('microblog.builder.asset_manager.get_content_dir', return_value=temp_content_structure['content']):
+                with patch('microblog.builder.asset_manager.get_static_dir', return_value=temp_content_structure['static']):
+                    manager = AssetManager()
+
+                    # Mock copy_directory_assets to raise an exception
+                    with patch.object(manager, 'copy_directory_assets', side_effect=OSError("Disk full")):
+                        with pytest.raises(AssetManagingError, match="Asset copying failed"):
+                            manager.copy_all_assets()
+
+    def test_clean_build_assets_success(self, mock_config, temp_content_structure):
+        """Test successful build asset cleaning."""
+        with patch('microblog.builder.asset_manager.get_config', return_value=mock_config):
+            with patch('microblog.builder.asset_manager.get_content_dir', return_value=temp_content_structure['content']):
+                with patch('microblog.builder.asset_manager.get_static_dir', return_value=temp_content_structure['static']):
+                    manager = AssetManager()
+
+                    # Create some asset directories to clean
+                    asset_dirs = [
+                        manager.build_dir / 'images',
+                        manager.build_dir / 'css',
+                        manager.build_dir / 'js'
+                    ]
+
+                    for asset_dir in asset_dirs:
+                        asset_dir.mkdir(parents=True, exist_ok=True)
+                        (asset_dir / "test_file.txt").write_text("test content")
+
+                    success = manager.clean_build_assets()
+
+                    assert success is True
+                    # Directories should be gone
+                    for asset_dir in asset_dirs:
+                        assert not asset_dir.exists()
+
+    def test_clean_build_assets_exception(self, mock_config, temp_content_structure):
+        """Test build asset cleaning with exception."""
+        with patch('microblog.builder.asset_manager.get_config', return_value=mock_config):
+            with patch('microblog.builder.asset_manager.get_content_dir', return_value=temp_content_structure['content']):
+                with patch('microblog.builder.asset_manager.get_static_dir', return_value=temp_content_structure['static']):
+                    manager = AssetManager()
+
+                    # Create one asset directory that exists
+                    asset_dir = manager.build_dir / 'images'
+                    asset_dir.mkdir(parents=True, exist_ok=True)
+
+                    # Mock shutil.rmtree to raise an exception
+                    with patch('shutil.rmtree', side_effect=OSError("Permission denied")):
+                        success = manager.clean_build_assets()
+
+                    assert success is False
+
+    def test_get_asset_info_exception_handling(self, mock_config, temp_content_structure):
+        """Test get_asset_info exception handling."""
+        with patch('microblog.builder.asset_manager.get_config', return_value=mock_config):
+            with patch('microblog.builder.asset_manager.get_content_dir', return_value=temp_content_structure['content']):
+                with patch('microblog.builder.asset_manager.get_static_dir', return_value=temp_content_structure['static']):
+                    manager = AssetManager()
+
+                    # Mock rglob to raise an exception during info gathering
+                    with patch.object(Path, 'rglob', side_effect=OSError("Permission denied")):
+                        info = manager.get_asset_info()
+
+                    # Should return empty info but not crash
+                    assert 'mappings' in info
+                    assert 'total_files' in info
+                    assert 'total_size' in info
 
 
 class TestBuildGenerator:

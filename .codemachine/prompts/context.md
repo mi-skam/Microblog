@@ -10,17 +10,17 @@ This is the full specification of the task you must complete.
 
 ```json
 {
-  "task_id": "I3.T3",
+  "task_id": "I3.T4",
   "iteration_id": "I3",
   "iteration_goal": "Implement core static site generator with template rendering, markdown processing, and atomic build system with backup/rollback",
-  "description": "Create Jinja2 template rendering system with base templates for homepage, post pages, archive, tags, and RSS feed. Implement template inheritance and context management.",
+  "description": "Implement asset manager for copying images and static files from content directory to build output. Handle file validation, path management, and build-time optimization.",
   "agent_type_hint": "BackendAgent",
-  "inputs": "Template requirements, site structure, Jinja2 best practices",
-  "target_files": ["microblog/builder/template_renderer.py", "templates/index.html", "templates/post.html", "templates/archive.html", "templates/tag.html", "templates/rss.xml"],
-  "input_files": ["templates/base.html", "microblog/server/config.py"],
-  "deliverables": "Template rendering engine, complete template set, context management, RSS feed generation",
-  "acceptance_criteria": "Templates render correctly with context, template inheritance works, RSS feed validates, all page types supported",
-  "dependencies": ["I3.T2"],
+  "inputs": "Asset management requirements, file copying strategy, image handling specifications",
+  "target_files": ["microblog/builder/asset_manager.py"],
+  "input_files": ["microblog/server/config.py"],
+  "deliverables": "Asset copying system, file validation, path management, static file handling",
+  "acceptance_criteria": "Images copy correctly to build directory, file paths resolve properly, validation prevents invalid files, static assets handled",
+  "dependencies": ["I1.T4"],
   "parallelizable": true,
   "done": false
 }
@@ -32,46 +32,114 @@ This is the full specification of the task you must complete.
 
 The following are the relevant sections from the architecture and plan documents, which I found by analyzing the task description.
 
-### Context: task-i3-t3 (from 02_Iteration_I3.md)
+### Context: task-i3-t4 (from 02_Iteration_I3.md)
 
 ```markdown
-<!-- anchor: task-i3-t3 -->
-*   **Task 3.3:**
-    *   **Task ID:** `I3.T3`
-    *   **Description:** Create Jinja2 template rendering system with base templates for homepage, post pages, archive, tags, and RSS feed. Implement template inheritance and context management.
+<!-- anchor: task-i3-t4 -->
+*   **Task 3.4:**
+    *   **Task ID:** `I3.T4`
+    *   **Description:** Implement asset manager for copying images and static files from content directory to build output. Handle file validation, path management, and build-time optimization.
     *   **Agent Type Hint:** `BackendAgent`
-    *   **Inputs:** Template requirements, site structure, Jinja2 best practices
-    *   **Input Files:** ["templates/base.html", "microblog/server/config.py"]
-    *   **Target Files:** ["microblog/builder/template_renderer.py", "templates/index.html", "templates/post.html", "templates/archive.html", "templates/tag.html", "templates/rss.xml"]
-    *   **Deliverables:** Template rendering engine, complete template set, context management, RSS feed generation
-    *   **Acceptance Criteria:** Templates render correctly with context, template inheritance works, RSS feed validates, all page types supported
-    *   **Dependencies:** `I3.T2`
+    *   **Inputs:** Asset management requirements, file copying strategy, image handling specifications
+    *   **Input Files:** ["microblog/server/config.py"]
+    *   **Target Files:** ["microblog/builder/asset_manager.py"]
+    *   **Deliverables:** Asset copying system, file validation, path management, static file handling
+    *   **Acceptance Criteria:** Images copy correctly to build directory, file paths resolve properly, validation prevents invalid files, static assets handled
+    *   **Dependencies:** `I1.T4`
     *   **Parallelizable:** Yes
 ```
 
-### Context: technology-stack (from 02_Architecture_Overview.md)
+### Context: directory-structure (from 01_Plan_Overview_and_Setup.md)
 
 ```markdown
-| **Template Engine** | Jinja2 | Latest | Industry standard with excellent performance, template inheritance, and extensive filter ecosystem. Native FastAPI integration. |
+<!-- anchor: directory-structure -->
+## 3. Directory Structure
+
+*   **Root Directory:** `microblog/`
+*   **Structure Definition:** Organized for clear separation of concerns with dedicated locations for source code, templates, content, and generated artifacts.
+
+~~~
+microblog/
+├── microblog/                      # Main Python package
+│   ├── builder/                    # Static site generation
+│   │   ├── __init__.py
+│   │   ├── generator.py            # Main build orchestration
+│   │   ├── markdown_processor.py   # Markdown parsing and frontmatter
+│   │   ├── template_renderer.py    # Jinja2 template rendering
+│   │   └── asset_manager.py        # Image and static file copying
+├── content/                        # User content directory (runtime)
+│   ├── posts/                      # Markdown blog posts
+│   ├── pages/                      # Static pages (about, contact, etc.)
+│   ├── images/                     # User-uploaded images
+│   └── _data/
+│       └── config.yaml             # Site configuration
+├── build/                          # Generated static site (gitignored)
+├── build.bak/                      # Build backup directory (gitignored)
+├── static/                         # Static assets for dashboard and site
+│   ├── css/
+│   │   ├── dashboard.css           # Dashboard-specific styles
+│   │   └── site.css                # Public site styles (Pico.css based)
+│   ├── js/
+│   │   ├── htmx.min.js             # Vendored HTMX library
+│   │   └── dashboard.js            # Minimal dashboard JavaScript
+│   └── images/
+│       └── favicon.ico             # Site favicon
+~~~
 ```
 
-### Context: static-generation-strategy (from 02_Architecture_Overview.md)
+### Context: data-storage-strategy (from 03_System_Structure_and_Data.md)
 
 ```markdown
-**Static Generation Strategy:**
-- Jinja2 templates provide flexibility for custom themes and layouts
-- python-markdown offers extensive plugin ecosystem for future enhancements
-- Separation of content (markdown) from presentation (templates) enables design iteration
+<!-- anchor: data-storage-strategy -->
+**Data Storage Strategy:**
+
+**File System Storage (content/):**
+- Markdown files with YAML frontmatter for posts
+- Images stored in organized directory structure
+- Configuration as human-readable YAML
+- Version control friendly (Git integration possible)
+- Direct file system access for build process
+
+**Generated Output (build/):**
+- Static HTML, CSS, and JavaScript files
+- Copied and optimized images
+- RSS feed and sitemap generation
+- Atomic generation with backup/rollback
+- Deployable to any static file server
+
+**Performance Considerations:**
+- File system operations optimized for sequential reading during builds
+- SQLite provides excellent performance for single-user authentication
+- Content directory structure designed for efficient traversal
+- Build output optimized for CDN and static hosting performance
 ```
 
-### Context: iteration-3-plan (from 02_Iteration_I3.md)
+### Context: core-architecture (from 01_Plan_Overview_and_Setup.md)
 
 ```markdown
-### Iteration 3: Static Site Generation & Build System
+<!-- anchor: core-architecture -->
+## 2. Core Architecture
 
-*   **Iteration ID:** `I3`
-*   **Goal:** Implement core static site generator with template rendering, markdown processing, and atomic build system with backup/rollback
-*   **Prerequisites:** `I2` (Authentication and core models completed)
+*   **Architectural Style:** Hybrid Static-First Architecture with Layered Monolith for Management
+*   **Technology Stack:**
+    *   Frontend: HTMX 1.9+ (vendored), Pico.css (<10KB), Vanilla JavaScript (minimal)
+    *   Backend: FastAPI 0.100+, Python 3.10+, Uvicorn ASGI server
+    *   Database: SQLite3 (Python stdlib) for single user authentication
+    *   Template Engine: Jinja2 for HTML generation and dashboard rendering
+    *   Markdown: python-markdown + pymdown-extensions for content processing
+    *   Authentication: python-jose + passlib[bcrypt] for JWT and password hashing
+    *   CLI: Click for command-line interface and management tools
+    *   File Watching: watchfiles for development mode configuration hot-reload
+    *   Deployment: Docker-ready, systemd service, nginx/Caddy reverse proxy support
+*   **Key Components/Services:**
+    *   **Authentication Service**: JWT-based single-user authentication with bcrypt password hashing
+    *   **Content Management Service**: CRUD operations for posts with markdown processing and validation
+    *   **Static Site Generator**: Template rendering and asset copying with atomic build process
+    *   **Dashboard Web Application**: HTMX-enhanced interface for content management and live preview
+    *   **Image Management Service**: Upload, validation, and organization of media files
+    *   **Build Management Service**: Orchestrates site generation with backup and rollback capabilities
+    *   **CLI Interface**: Commands for build, serve, user creation, and system management
+    *   **Configuration Manager**: YAML-based settings with validation and hot-reload support
 ```
 
 ---
@@ -83,35 +151,33 @@ The following analysis is based on my direct review of the current codebase. Use
 ### Relevant Existing Code
 
 *   **File:** `microblog/server/config.py`
-    *   **Summary:** This file contains the complete configuration management system with Pydantic models (SiteConfig, BuildConfig, etc.) and hot-reload support. The AppConfig class provides structured access to all site configuration.
-    *   **Recommendation:** You MUST import and use the `get_config()` function from this file to access site configuration. The configuration includes `site.title`, `site.url`, `site.author`, `site.description` which are essential for template context.
-
-*   **File:** `microblog/builder/markdown_processor.py`
-    *   **Summary:** This file contains a fully implemented MarkdownProcessor class with python-markdown, pymdown-extensions, syntax highlighting, and validation. It has methods like `process_content()` and `get_toc()` for table of contents.
-    *   **Recommendation:** You SHOULD import and use the `get_markdown_processor()` function from this file. The processor can generate HTML content and table of contents that you'll need in your templates.
-
-*   **File:** `microblog/content/post_service.py`
-    *   **Summary:** This file provides the PostService class with complete CRUD operations for blog posts, including methods like `list_posts()`, `get_published_posts()`, and post filtering by tags. Posts are structured with frontmatter and content.
-    *   **Recommendation:** You MUST import and use the `get_post_service()` function from this file to retrieve post data for templates. The service provides filtered post lists that you'll need for homepage, archive, and tag pages.
+    *   **Summary:** This file contains the comprehensive configuration management system with YAML parsing, validation, and hot-reload support. It defines `BuildConfig` with `output_dir` and `backup_dir` settings.
+    *   **Recommendation:** You MUST import and use the `get_config()` function to access build directory paths. The `BuildConfig` provides `output_dir` (defaults to 'build') and `backup_dir` (defaults to 'build.bak') settings.
 
 *   **File:** `microblog/utils.py`
-    *   **Summary:** This file contains utility functions including `get_templates_dir()`, `get_project_root()`, `get_build_dir()`, and `ensure_directory()` for filesystem operations.
-    *   **Recommendation:** You SHOULD use these utility functions for path management. `get_templates_dir()` returns the templates directory path, which is essential for Jinja2 template loading.
+    *   **Summary:** This file contains shared utilities including directory management and path helpers. It provides `ensure_directory()`, `safe_copy_file()`, and path getter functions.
+    *   **Recommendation:** You SHOULD reuse the existing `safe_copy_file()` and `ensure_directory()` functions. The file also provides `get_content_dir()`, `get_build_dir()`, and `get_static_dir()` path helpers that you MUST use for consistency.
+
+*   **File:** `microblog/builder/markdown_processor.py`
+    *   **Summary:** This file shows the established pattern for builder components with error handling, logging, and global instance management.
+    *   **Recommendation:** You MUST follow the same architectural pattern: create an `AssetManagingError` exception class, use comprehensive logging, and provide a global `get_asset_manager()` function.
+
+*   **File:** `microblog/builder/template_renderer.py`
+    *   **Summary:** This file demonstrates the builder module pattern with initialization, error handling, and integration with the configuration system.
+    *   **Recommendation:** You SHOULD follow the same initialization pattern and integrate with the configuration system using `get_config()`.
 
 ### Implementation Tips & Notes
 
-*   **Tip:** I confirmed that Jinja2 is already included in the project dependencies (version >=3.1.0) in pyproject.toml. You can import it directly.
+*   **Tip:** I found the build process sequence diagram at `docs/diagrams/build_process.puml` shows the asset manager is called during the "Asset Copying Phase" by the Build Management Service. Your asset manager will be invoked as part of the atomic build workflow.
 
-*   **Note:** The task specifies `templates/base.html` as an input file, but this file does not exist yet. You will need to create this base template first as the foundation for template inheritance.
+*   **Note:** The configuration file at `content/_data/config.yaml` shows the build settings structure. The asset manager needs to handle copying from multiple sources: `content/images/` (user uploads) and `static/` (dashboard assets) to the build output directory.
 
-*   **Tip:** The PostContent objects from the post service have frontmatter attributes like `title`, `date`, `tags`, `description`, `slug`, and `is_draft`. Use these for template context.
+*   **Tip:** The directory structure shows that images go to `content/images/` and static assets are in `static/`. Both need to be copied to the build directory with proper organization.
 
-*   **Note:** The configuration system provides site-level information (`site.title`, `site.url`, `site.author`, `site.description`) that should be included in template context for all pages.
+*   **Warning:** The build process diagram emphasizes atomic operations with backup/rollback. Your asset manager MUST support the atomic build pattern - if copying fails at any point, the build system should be able to rollback cleanly.
 
-*   **Warning:** The templates directory exists but is currently empty except for a dashboard subdirectory. You need to create all template files from scratch following Jinja2 best practices.
+*   **Pattern:** All builder modules follow the pattern: `SomeBuilderError` exception class, logging, initialization with config, and a global getter function like `get_asset_manager()`.
 
-*   **Tip:** For RSS feed generation, you'll need to format dates in RFC 2822 format and ensure proper XML escaping. Consider using Jinja2's built-in filters for this.
+*   **Security:** File validation is mentioned in the acceptance criteria. You SHOULD implement validation to prevent copying of dangerous file types or files outside expected locations.
 
-*   **Note:** The acceptance criteria specifically mentions "template inheritance works" - this means your base.html template should define blocks that other templates extend, following standard Jinja2 patterns.
-
-*   **Tip:** The markdown processor has a `get_toc()` method that returns HTML table of contents - this could be useful for post pages with navigation.
+*   **Performance:** The architecture emphasizes build performance targets (<5s for 100 posts). Your asset copying should be efficient and only copy files that have changed when possible.

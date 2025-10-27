@@ -6,13 +6,13 @@ the main dashboard view, post listing, and statistics display with HTMX support.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, date
 
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Request, Form, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from microblog.content.post_service import get_post_service
+from microblog.content.post_service import get_post_service, PostNotFoundError, PostValidationError, PostFileError
 from microblog.server.middleware import get_csrf_token, get_current_user
 from microblog.utils import get_content_dir
 
@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 # Initialize templates
-templates = Jinja2Templates(directory=str(get_content_dir() / "templates"))
+from pathlib import Path
+project_root = Path(__file__).parent.parent.parent.parent
+templates = Jinja2Templates(directory=str(project_root / "templates"))
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -285,3 +287,128 @@ async def pages_list(request: Request):
             "current_year": datetime.now().year
         }
     )
+
+
+# API endpoints for post management
+@router.post("/api/posts")
+async def create_post_api(
+    request: Request,
+    title: str = Form(...),
+    content: str = Form(...),
+    slug: str = Form(""),
+    description: str = Form(""),
+    tags: str = Form(""),
+    date: str = Form(""),
+    draft: str = Form("false")
+):
+    """
+    Create a new post via API.
+
+    Returns:
+        Redirect to posts list on success, error response on failure
+    """
+    try:
+        # Get current user (middleware ensures this exists for protected routes)
+        user = get_current_user(request)
+
+        # Get post service
+        post_service = get_post_service()
+
+        # Parse form data
+        post_date = datetime.now().date() if not date else datetime.fromisoformat(date).date()
+        post_tags = [tag.strip() for tag in tags.split(",") if tag.strip()] if tags else []
+        is_draft = draft.lower() in ("true", "1", "yes", "on")
+        post_slug = slug.strip() if slug.strip() else None
+        post_description = description.strip() if description.strip() else None
+
+        # Create the post
+        created_post = post_service.create_post(
+            title=title,
+            content=content,
+            date=post_date,
+            slug=post_slug,
+            tags=post_tags,
+            draft=is_draft,
+            description=post_description
+        )
+
+        logger.info(f"Post created by user {user['username']}: {created_post.frontmatter.title}")
+
+        # Redirect to posts list
+        return RedirectResponse(url="/dashboard/posts", status_code=303)
+
+    except PostValidationError as e:
+        logger.error(f"Post validation error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except PostFileError as e:
+        logger.error(f"Post file error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error creating post: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/api/posts/{slug}")
+async def update_post_api(
+    request: Request,
+    slug: str,
+    title: str = Form(...),
+    content: str = Form(...),
+    new_slug: str = Form(""),
+    description: str = Form(""),
+    tags: str = Form(""),
+    date: str = Form(""),
+    draft: str = Form("false")
+):
+    """
+    Update an existing post via API.
+
+    Args:
+        slug: Current slug of the post to update
+
+    Returns:
+        Redirect to posts list on success, error response on failure
+    """
+    try:
+        # Get current user (middleware ensures this exists for protected routes)
+        user = get_current_user(request)
+
+        # Get post service
+        post_service = get_post_service()
+
+        # Parse form data
+        post_date = datetime.fromisoformat(date).date() if date else None
+        post_tags = [tag.strip() for tag in tags.split(",") if tag.strip()] if tags else []
+        is_draft = draft.lower() in ("true", "1", "yes", "on")
+        updated_slug = new_slug.strip() if new_slug.strip() else None
+        post_description = description.strip() if description.strip() else None
+
+        # Update the post
+        updated_post = post_service.update_post(
+            slug=slug,
+            title=title,
+            content=content,
+            date=post_date,
+            new_slug=updated_slug,
+            tags=post_tags,
+            draft=is_draft,
+            description=post_description
+        )
+
+        logger.info(f"Post updated by user {user['username']}: {updated_post.frontmatter.title}")
+
+        # Redirect to posts list
+        return RedirectResponse(url="/dashboard/posts", status_code=303)
+
+    except PostNotFoundError as e:
+        logger.error(f"Post not found: {e}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except PostValidationError as e:
+        logger.error(f"Post validation error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except PostFileError as e:
+        logger.error(f"Post file error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error updating post: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

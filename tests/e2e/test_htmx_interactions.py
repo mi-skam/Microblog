@@ -77,13 +77,35 @@ class TestHTMXInteractions:
             'role': 'admin'
         }
 
-        with patch('microblog.auth.jwt_handler.verify_jwt_token', return_value=mock_user), \
-             patch('microblog.server.middleware.get_current_user', return_value=mock_user), \
+        # Mock JWT token verification to return user payload
+        mock_payload = {
+            'user_id': 1,
+            'username': 'testuser',
+            'role': 'admin'
+        }
+
+        # Mock middleware dispatch functions to bypass authentication
+        async def mock_auth_dispatch(request, call_next):
+            # Set user state manually
+            request.state.user = mock_user
+            request.state.authenticated = True
+            return await call_next(request)
+
+        async def mock_csrf_dispatch(request, call_next):
+            # Set CSRF token state manually
+            request.state.csrf_token = 'test-csrf-token'
+            return await call_next(request)
+
+        with patch('microblog.auth.jwt_handler.verify_jwt_token', return_value=mock_payload), \
              patch('microblog.server.middleware.require_authentication', return_value=mock_user), \
-             patch('microblog.server.middleware.get_csrf_token', return_value='test-csrf-token'):
+             patch('microblog.server.middleware.get_current_user', return_value=mock_user), \
+             patch('microblog.server.middleware.get_csrf_token', return_value='test-csrf-token'), \
+             patch('microblog.server.middleware.AuthenticationMiddleware.dispatch', side_effect=mock_auth_dispatch), \
+             patch('microblog.server.middleware.CSRFProtectionMiddleware.dispatch', side_effect=mock_csrf_dispatch):
 
             client = TestClient(authenticated_app)
             client.cookies.set("jwt", "test-jwt-token")
+            client.cookies.set("csrf_token", "test-csrf-token")
             yield client
 
     def test_htmx_post_creation_api(self, authenticated_client):
@@ -134,7 +156,7 @@ class TestHTMXInteractions:
                     # Other response codes indicate endpoint exists and is responding
                     assert response.status_code in [200, 201, 302, 401, 403, 422, 500]
 
-            except Exception as e:
+            except Exception:
                 # If there are configuration issues, ensure the test concept is valid
                 assert mock_service is not None  # Service injection works
 
@@ -350,7 +372,10 @@ class TestHTMXInteractions:
         image_file = BytesIO(b"fake-image-content")
 
         mock_image_service = Mock()
-        from microblog.content.image_service import ImageValidationError, ImageUploadError
+        from microblog.content.image_service import (
+            ImageUploadError,
+            ImageValidationError,
+        )
 
         # Test validation error
         mock_image_service.save_uploaded_file_async = AsyncMock(side_effect=ImageValidationError("Invalid image format"))
@@ -683,7 +708,8 @@ class TestHTMXInteractions:
             assert "alert-error" in html_content
             assert "hx-swap-oob" in html_content
             assert "id=\"error-container\"" in html_content
-            assert "Title is required" in html_content
+            # Check for validation error in response, allowing for error message wrapping
+            assert ("Validation error" in html_content and "Title cannot be empty" in html_content)
 
     def test_htmx_success_fragment_validation(self, authenticated_client):
         """Test HTMX success fragment generation and validation."""

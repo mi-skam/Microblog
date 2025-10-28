@@ -8,70 +8,56 @@ The previous code submission did not pass verification. You must fix the followi
 
 Create end-to-end tests for complete user workflows including authentication, post creation with images, live preview, publishing, and build processes.
 
-**Agent Type Hint:** TestingAgent
-**Target Files:** ["tests/e2e/test_complete_workflows.py", "tests/e2e/test_htmx_interactions.py"]
-**Deliverables:** End-to-end test suite covering complete user workflows and HTMX functionality
+**Target Files:**
+- tests/e2e/test_complete_workflows.py
+- tests/e2e/test_htmx_interactions.py
+
 **Acceptance Criteria:** Complete user journeys tested, HTMX interactions verified, image upload workflows tested, build process integration tested, test coverage comprehensive
 
 ---
 
 ## Issues Detected
 
-### Test Failures (31 out of 36 tests failing)
-*   **Template Error:** Multiple tests failing with `TemplateNotFound` error for `dashboard/home.html` and other templates. The minimal templates created in fixtures are not being found by the Jinja2 template loader.
-*   **Import Module Error:** Tests failing with `ModuleNotFoundError: No module named 'microblog.server.routes.dashboard'` - indicates routing module imports are failing.
-*   **App Creation Issues:** The `create_app()` function is failing due to missing dependencies and configuration issues, causing tests to fall back to minimal FastAPI app.
-*   **Service Mocking Issues:** Service injection and mocking patterns are not working correctly - services like `get_post_service`, `get_image_service`, etc. are not being properly mocked.
-*   **Authentication Middleware Problems:** The authentication patches are not working correctly, causing 404 errors instead of successful authenticated responses.
+### **Test Failures in Complete Workflows:**
+*   **Test Failure:** `test_post_editing_and_publishing_workflow` is failing because the edit endpoint `/dashboard/posts/draft-post/edit` returns 404 instead of 200.
+*   **Test Failure:** `test_draft_to_published_state_workflow` is failing because the PUT endpoint `/api/posts/draft-article` returns 404 instead of 200.
+*   **Test Failure:** `test_error_handling_in_complete_workflow` is failing because dashboard access returns 500 instead of expected error handling.
+*   **Test Failure:** `test_multi_post_management_workflow` is failing because dashboard stats template expects different data format.
+*   **Test Failure:** `test_form_validation_and_recovery_workflow` is failing because validation error messages don't match expected format.
+*   **Test Failure:** `test_complete_workflow_with_tags` is failing because the API endpoint returns 404 instead of 201.
 
-### Linting Errors (9 total)
-*   **Unused Import F401:** `unittest.mock.AsyncMock` imported but unused in `test_complete_workflows.py:11`
-*   **Unused Import F401:** `urllib.parse.parse_qs` imported but unused in `test_complete_workflows.py:12`
-*   **Unused Import F401:** `urllib.parse.urlparse` imported but unused in `test_complete_workflows.py:12`
-*   **Unused Variable F841:** Local variable `e` assigned but never used in multiple exception handlers
-*   **Missing Newline W292:** No newline at end of both test files
-*   **Import Organization I001:** Import block is un-sorted in `test_htmx_interactions.py:353`
+### **Test Failures in HTMX Interactions:**
+*   **Test Failure:** `test_htmx_post_update_api` is failing because the PUT endpoint `/api/posts/htmx-test-post` returns 404 instead of 200.
+*   **Test Failure:** `test_htmx_post_deletion_api` is failing because the DELETE endpoint `/api/posts/post-to-delete` returns 404 instead of 200.
+*   **Test Failure:** `test_htmx_publish_unpublish_workflow` is failing because publish/unpublish endpoints return 404.
+*   **Test Failure:** `test_htmx_markdown_preview_api` is failing because the preview endpoint returns 404.
+*   **Test Failure:** Multiple image upload, build, and tag-related tests are failing because endpoints return 404.
+*   **Test Failure:** `test_htmx_success_fragment_validation` is failing because the created post response doesn't match expected format.
 
-### Structural Issues
-*   **Missing Template Registration:** The temporary templates created in fixtures are not being registered with the Jinja2 environment properly.
-*   **Service Import Paths:** The mock patches are using incorrect import paths that don't match the actual application structure.
-*   **HTMX Endpoint Testing:** Many HTMX-specific endpoints return 404 errors, indicating the actual API routes may not exist or are at different paths.
+### **Root Cause Analysis:**
+*   **Missing Route Implementation:** Many API endpoints expected by the tests are not implemented or not properly routed in the application.
+*   **Template Issues:** Dashboard templates are expecting different data structures than what the tests provide.
+*   **Service Mocking Problems:** The test mocks are not properly interfacing with the actual service layer implementations.
+*   **Authentication Issues:** Some endpoints may have authentication requirements that the test mocks don't properly satisfy.
 
 ---
 
 ## Best Approach to Fix
 
-You MUST fix the E2E tests by addressing the fundamental application integration issues:
+You MUST implement the missing API endpoints and fix the test expectations to match the actual application implementation. Follow this systematic approach:
 
-1. **Fix Template Loading:**
-   - Configure the FastAPI app's Jinja2Templates to use the temporary template directory from fixtures
-   - Ensure template inheritance and path resolution works correctly
-   - Verify all required templates (base, dashboard/home, dashboard/post_edit, etc.) exist
+1. **Review Actual API Routes:** First examine `microblog/server/routes/api.py` and `microblog/server/routes/dashboard.py` to understand which endpoints actually exist and their expected parameters.
 
-2. **Fix Service Mocking:**
-   - Use correct import paths for service mocking (check actual codebase structure)
-   - Ensure service factory functions are properly mocked before app creation
-   - Fix dependency injection patterns to work with the actual application architecture
+2. **Fix Service Mocking:** Update the test mocks in both files to properly interface with the service layer. Ensure that `get_post_service()`, `get_image_service()`, `get_build_service()`, and `get_tag_service()` are mocked at the correct import paths.
 
-3. **Fix Authentication Integration:**
-   - Properly mock authentication middleware at the correct points in the request lifecycle
-   - Ensure CSRF token generation and validation is mocked consistently
-   - Use the authentication patterns established in existing integration tests
+3. **Implement Missing Endpoints:** If endpoints are missing from the actual API implementation, either:
+   - Add placeholder endpoints that return appropriate responses for testing, OR
+   - Update the tests to use endpoints that actually exist in the codebase
 
-4. **Fix HTMX API Routes:**
-   - Verify the actual HTMX API endpoint paths in the codebase
-   - Ensure tests target existing endpoints or mock them appropriately
-   - Test actual HTML fragment responses with proper HTMX attributes
+4. **Fix Template Data Expectations:** Update the test assertions to match the actual template data structures used by the dashboard. Check the template files in `content/templates/dashboard/` to understand the expected data format.
 
-5. **Fix Linting Issues:**
-   - Remove unused imports: `AsyncMock`, `parse_qs`, `urlparse`
-   - Remove unused exception variables or use them appropriately
-   - Add newlines at end of files
-   - Fix import organization by moving inline imports to the top
+5. **Verify Authentication Flow:** Ensure that the authentication mocking in the test fixtures properly bypasses middleware and sets the required user state for protected endpoints.
 
-6. **Improve Test Reliability:**
-   - Use more robust fixture setup that mirrors the actual application configuration
-   - Add proper error handling that doesn't mask real issues
-   - Ensure tests can run independently without cross-test dependencies
+6. **Update Error Handling Tests:** Review how the application actually handles errors and update the test expectations to match the real error response formats and status codes.
 
-The tests should demonstrate complete user workflows while being resilient to configuration and dependency issues. Focus on testing the workflow logic and service interactions rather than full stack integration if the application setup continues to be problematic.
+You MUST ensure that all test assertions match the actual API behavior, template structures, and error handling patterns implemented in the microblog application.

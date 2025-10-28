@@ -16,11 +16,21 @@ This is the full specification of the task you must complete.
   "description": "Create end-to-end tests for complete user workflows including authentication, post creation with images, live preview, publishing, and build processes.",
   "agent_type_hint": "TestingAgent",
   "inputs": "Complete user workflows, E2E testing requirements, HTMX interaction testing",
-  "target_files": ["tests/e2e/test_complete_workflows.py", "tests/e2e/test_htmx_interactions.py"],
-  "input_files": ["microblog/server/app.py", "microblog/server/routes/api.py", "tests/conftest.py"],
+  "target_files": [
+    "tests/e2e/test_complete_workflows.py",
+    "tests/e2e/test_htmx_interactions.py"
+  ],
+  "input_files": [
+    "microblog/server/app.py",
+    "microblog/server/routes/api.py",
+    "tests/conftest.py"
+  ],
   "deliverables": "End-to-end test suite covering complete user workflows and HTMX functionality",
   "acceptance_criteria": "Complete user journeys tested, HTMX interactions verified, image upload workflows tested, build process integration tested, test coverage comprehensive",
-  "dependencies": ["I5.T6", "I5.T7"],
+  "dependencies": [
+    "I5.T6",
+    "I5.T7"
+  ],
   "parallelizable": true,
   "done": false
 }
@@ -68,35 +78,169 @@ The following are the relevant sections from the architecture and plan documents
     *   **Build Output Validation**: Generated HTML validation, link checking, and asset verification
 ```
 
-### Context: task-i5-t8 (from 02_Iteration_I5.md)
+### Context: key-interaction-flow (from 04_Behavior_and_Communication.md)
 
 ```markdown
-    <!-- anchor: task-i5-t8 -->
-    *   **Task 5.8:**
-        *   **Task ID:** `I5.T8`
-        *   **Description:** Create end-to-end tests for complete user workflows including authentication, post creation with images, live preview, publishing, and build processes.
-        *   **Agent Type Hint:** `TestingAgent`
-        *   **Inputs:** Complete user workflows, E2E testing requirements, HTMX interaction testing
-        *   **Input Files:** ["microblog/server/app.py", "microblog/server/routes/api.py", "tests/conftest.py"]
-        *   **Target Files:** ["tests/e2e/test_complete_workflows.py", "tests/e2e/test_htmx_interactions.py"]
-        *   **Deliverables:** End-to-end test suite covering complete user workflows and HTMX functionality
-        *   **Acceptance Criteria:** Complete user journeys tested, HTMX interactions verified, image upload workflows tested, build process integration tested, test coverage comprehensive
-        *   **Dependencies:** `I5.T6`, `I5.T7`
-        *   **Parallelizable:** Yes
+**Key Interaction Flow (Sequence Diagram):**
+
+**Description:** This diagram illustrates the complete workflow for user authentication and post creation, showing the interaction between the web browser, dashboard application, authentication system, and content storage.
+
+**Diagram (PlantUML):**
+```plantuml
+@startuml
+actor "Content Author" as author
+participant "Web Browser" as browser
+participant "Dashboard App" as dashboard
+participant "Auth Middleware" as auth
+participant "Post Service" as posts
+participant "Content Storage" as storage
+participant "Static Generator" as generator
+participant "Build Output" as build
+
+== Authentication Flow ==
+author -> browser : Enter credentials and login
+browser -> dashboard : POST /auth/login (username, password)
+dashboard -> auth : Validate credentials
+auth -> dashboard : JWT token
+dashboard -> browser : Set httpOnly cookie + redirect
+browser -> author : Show dashboard interface
+
+== Post Creation Flow ==
+author -> browser : Click "New Post"
+browser -> dashboard : GET /dashboard/posts/new
+dashboard -> browser : HTML form with CSRF token
+author -> browser : Fill form (title, content, tags)
+browser -> dashboard : POST /api/posts (HTMX request)
+
+dashboard -> auth : Validate JWT from cookie
+auth -> dashboard : User authenticated
+
+dashboard -> posts : Create post with metadata
+posts -> storage : Write markdown file
+storage -> posts : File created successfully
+posts -> dashboard : Post created
+
+dashboard -> generator : Trigger build process
+generator -> storage : Read all content files
+storage -> generator : Content data
+generator -> build : Generate static HTML
+build -> generator : Build completed
+generator -> dashboard : Build status
+
+dashboard -> browser : HTML fragment with success message
+browser -> author : Show updated post list + success
+
+== Live Preview Flow ==
+author -> browser : Type in markdown editor
+note right : 500ms debounce
+browser -> dashboard : POST /api/preview (HTMX)
+dashboard -> posts : Render markdown
+posts -> dashboard : HTML preview
+dashboard -> browser : HTML fragment
+browser -> author : Live preview updated
+
+@enduml
+```
 ```
 
-### Context: glossary (from 03_Verification_and_Glossary.md)
+### Context: htmx-integration (from 04_Behavior_and_Communication.md)
 
 ```markdown
-*   **HTMX**: JavaScript library that allows access to AJAX, CSS Transitions, WebSockets and Server-Sent Events directly in HTML using attributes, enabling dynamic interactions without complex JavaScript frameworks.
+**HTMX Integration Patterns:**
 
-*   **httpOnly Cookie**: Web cookie with the httpOnly flag set, making it inaccessible to client-side scripts and providing protection against XSS attacks.
+1. **Live Form Validation**
+```html
+<input name="title"
+       hx-post="/api/validate/title"
+       hx-trigger="blur"
+       hx-target="#title-feedback">
+```
 
-*   **JWT (JSON Web Token)**: Compact, URL-safe token format for securely transmitting information between parties as a JSON object, used for stateless authentication.
+2. **Dynamic Content Updates**
+```html
+<button hx-delete="/api/posts/123"
+        hx-confirm="Delete this post?"
+        hx-target="#post-123"
+        hx-swap="outerHTML">Delete</button>
+```
 
-*   **CSRF (Cross-Site Request Forgery)**: Security vulnerability where unauthorized commands are transmitted from a user that the web application trusts. Prevented using synchronizer tokens.
+3. **Live Markdown Preview**
+```html
+<textarea name="content"
+          hx-post="/api/preview"
+          hx-trigger="keyup changed delay:500ms"
+          hx-target="#preview-pane">
+```
 
-*   **FastAPI**: Modern, fast web framework for building APIs with Python 3.7+ based on standard Python type hints with automatic API documentation.
+4. **Build Progress Updates**
+```html
+<button hx-post="/api/build"
+        hx-target="#build-status"
+        hx-indicator="#build-spinner">Rebuild Site</button>
+```
+```
+
+### Context: api-endpoints-detail (from 04_Behavior_and_Communication.md)
+
+```markdown
+**Detailed API Endpoints:**
+
+**Authentication Endpoints:**
+```
+POST /auth/login
+Content-Type: application/x-www-form-urlencoded
+Body: username=admin&password=secret&csrf_token=...
+Response: 302 Redirect + Set-Cookie: jwt=...; HttpOnly; Secure; SameSite=Strict
+
+POST /auth/logout
+Response: 302 Redirect + Set-Cookie: jwt=; Expires=Thu, 01 Jan 1970 00:00:00 GMT
+```
+
+**Dashboard API Endpoints:**
+```
+GET /dashboard
+Headers: Cookie: jwt=...
+Response: 200 OK + HTML dashboard page
+
+POST /api/posts
+Headers: Cookie: jwt=...; X-CSRF-Token: ...
+Content-Type: application/json
+Body: {
+  "title": "My New Post",
+  "content": "# Hello World\nThis is my post content",
+  "tags": ["tech", "blogging"],
+  "draft": true
+}
+Response: 201 Created + HTML fragment with post data
+
+PUT /api/posts/123
+Headers: Cookie: jwt=...; X-CSRF-Token: ...
+Content-Type: application/json
+Body: { "title": "Updated Title", "content": "...", "draft": false }
+Response: 200 OK + HTML fragment with updated post
+
+DELETE /api/posts/123
+Headers: Cookie: jwt=...; X-CSRF-Token: ...
+Response: 200 OK + HTML fragment removing post from list
+
+POST /api/build
+Headers: Cookie: jwt=...; X-CSRF-Token: ...
+Response: 202 Accepted + HTML fragment with build progress
+```
+
+**Image Upload Endpoint:**
+```
+POST /api/images
+Headers: Cookie: jwt=...; X-CSRF-Token: ...
+Content-Type: multipart/form-data
+Body: file=@image.jpg
+Response: 201 Created + JSON with image URL and markdown snippet
+{
+  "filename": "2025-10-26-image.jpg",
+  "url": "../images/2025-10-26-image.jpg",
+  "markdown": "![Image description](../images/2025-10-26-image.jpg)"
+}
+```
 ```
 
 ---
@@ -106,29 +250,41 @@ The following are the relevant sections from the architecture and plan documents
 The following analysis is based on my direct review of the current codebase. Use these notes and tips to guide your implementation.
 
 ### Relevant Existing Code
-*   **File:** `tests/conftest.py`
-    *   **Summary:** Contains shared test fixtures including temporary config files, valid/invalid config data, mock authentication callback, and temporary content directory structures. Provides comprehensive fixtures for testing configuration management, authentication flows, and content handling.
-    *   **Recommendation:** You MUST leverage the existing fixtures like `valid_config_data`, `temp_config_file`, and `temp_content_dir` for consistent test setup. The mock authentication patterns are already established and should be reused.
+*   **File:** `tests/e2e/test_complete_workflows.py`
+    *   **Summary:** This file contains comprehensive E2E tests for complete user workflows but appears to be partially implemented. It has substantial test coverage for authentication, post creation, editing, and publishing workflows.
+    *   **Recommendation:** You SHOULD extend the existing test structure rather than rewriting. The current tests use good patterns with mocking and temporary directories. Focus on completing missing test scenarios and improving robustness.
 
-*   **File:** `microblog/server/app.py`
-    *   **Summary:** Main FastAPI application factory with middleware configuration, route registration, CORS setup, authentication middleware, CSRF protection, and security headers. Includes health check endpoint and startup/shutdown event handlers.
-    *   **Recommendation:** You MUST use the `create_app()` function to create test application instances. The app has authentication middleware at `/dashboard`, `/api/`, `/admin/` paths and CSRF protection. Use the health check endpoint `/health` for basic connectivity testing.
+*   **File:** `tests/e2e/test_htmx_interactions.py`
+    *   **Summary:** This file contains HTMX-specific interaction tests including dynamic post operations, live preview, image uploads, and build processes. The test structure is well-designed with proper service mocking.
+    *   **Recommendation:** You SHOULD build upon the existing HTMX test patterns. The tests already cover API endpoints, fragment validation, and authentication requirements. Enhance coverage for edge cases and error scenarios.
+
+*   **File:** `tests/conftest.py`
+    *   **Summary:** This file provides shared test fixtures including temporary directories, configuration data, and mock utilities for the test suite.
+    *   **Recommendation:** You MUST reuse the existing fixtures for consistency. The `temp_config_file`, `valid_config_data`, and `temp_content_dir` fixtures are well-structured and should be used in your E2E tests.
 
 *   **File:** `microblog/server/routes/api.py`
-    *   **Summary:** Complete HTMX API endpoints for dynamic post operations including create, update, delete, publish/unpublish, markdown preview, image upload, build triggering, and tag management. Returns HTML fragments optimized for HTMX integration.
-    *   **Recommendation:** You MUST test all HTMX endpoints which return HTML fragments instead of JSON. Key endpoints include `/api/posts` (POST/PUT/DELETE), `/api/preview` (POST), `/api/images/upload` (POST), `/api/build` (POST), and `/api/tags/autocomplete` (GET). All require authentication and CSRF tokens.
+    *   **Summary:** This file contains the HTMX API endpoints that your E2E tests need to validate. It includes endpoints for posts, preview, images, and build processes with proper error handling.
+    *   **Recommendation:** You SHOULD test all the API endpoints defined in this file. Pay special attention to the error fragment generation patterns and HTMX response formats.
 
-*   **File:** `tests/integration/test_dashboard.py`
-    *   **Summary:** Comprehensive integration tests for dashboard functionality with sophisticated mocking patterns, template testing, authentication simulation, and complete user workflow testing. Demonstrates proper FastAPI testing with TestClient.
-    *   **Recommendation:** You MUST follow the established testing patterns including authentication mocking with `patch('microblog.server.middleware.get_current_user')`, CSRF token mocking, and service mocking. The file shows excellent examples of workflow testing that you should adapt for E2E tests.
+*   **File:** `microblog/server/app.py`
+    *   **Summary:** This file contains the FastAPI application factory with middleware configuration, route registration, and authentication setup.
+    *   **Recommendation:** You MUST use the `create_app()` function in your E2E tests to ensure you're testing the complete application stack including middleware.
 
 ### Implementation Tips & Notes
-*   **Tip:** The existing integration tests in `test_dashboard.py` show that authentication is mocked using `patch('microblog.server.middleware.get_current_user', return_value=mock_user)`. You SHOULD use the same pattern for E2E tests to ensure consistent authentication simulation.
-*   **Note:** The HTMX API endpoints in `api.py` return HTML fragments with specific patterns like error fragments (`_create_error_fragment`) and success fragments (`_create_success_fragment`). Your tests MUST validate these HTML responses and check for HTMX-specific attributes like `hx-swap-oob`.
-*   **Warning:** All API endpoints require CSRF tokens for POST/PUT/DELETE operations. The middleware checks for CSRF tokens in headers (`X-CSRF-Token`), form fields (`csrf_token`), or cookies. Your E2E tests MUST include proper CSRF token handling.
-*   **Tip:** The application uses both SQLite (for users) and filesystem (for posts/images) storage. The existing `temp_content_dir` fixture creates the proper directory structure including `posts/`, `images/`, `_data/` directories that your tests will need.
-*   **Note:** Build operations are asynchronous with job queuing. The `/api/build` endpoint returns job IDs and `/api/build/{job_id}/status` provides progress tracking. Your E2E tests SHOULD test the complete build workflow including status polling.
-*   **Warning:** The codebase has extensive error handling with specific exception types like `PostValidationError`, `PostNotFoundError`, `PostFileError`, `ImageValidationError`, and `ImageUploadError`. Your tests MUST verify proper error handling scenarios.
-*   **Tip:** Image upload testing requires multipart form data with `enctype="multipart/form-data"`. The existing test patterns show how to handle file uploads with `UploadFile` mocking and validation of the returned markdown snippets.
-*   **Note:** The E2E test directory `tests/e2e/` is currently empty, so you're creating the first E2E tests. Follow the naming conventions established in other test directories and use the `Test*` class pattern shown in integration tests.
-*   **Warning:** Testing dependencies include `pytest>=7.4.0`, `pytest-asyncio>=0.21.0`, `httpx>=0.25.0`, and `pytest-cov>=4.1.0`. All async operations should be properly handled with `pytest-asyncio` decorators where needed.
+*   **Tip:** The existing E2E tests already use a sophisticated mocking strategy with `patch()` decorators for service injection. You SHOULD follow the same pattern to isolate external dependencies while testing the complete workflow logic.
+
+*   **Note:** Both E2E test files use `TestClient` from FastAPI for making HTTP requests. This is the correct approach for testing the complete request/response cycle including middleware processing.
+
+*   **Warning:** The current E2E tests have some resilience built in for authentication failures and middleware issues. You SHOULD maintain this defensive testing approach, especially for authentication workflows that may fail due to configuration issues.
+
+*   **Tip:** The tests use temporary directories for content storage which is excellent for isolation. You SHOULD extend the `temp_project_dir` fixture pattern to create more realistic test scenarios with actual files and directories.
+
+*   **Note:** The HTMX tests validate HTML fragment responses and content types. You MUST ensure your new tests verify that API endpoints return proper HTML fragments with correct `hx-swap-oob` attributes for HTMX integration.
+
+*   **Important:** The existing tests show good patterns for testing error scenarios, validation failures, and service unavailability. You SHOULD add more comprehensive error testing for edge cases like network failures, file system errors, and race conditions.
+
+*   **Tip:** I noticed the tests mock image uploads using `BytesIO` and file-like objects. You SHOULD use this pattern for testing complete image upload workflows including validation, processing, and markdown snippet generation.
+
+*   **Performance Note:** The test suite should validate that build processes complete within expected timeframes (< 5s for small content sets as per architecture requirements). You SHOULD add performance validation to build workflow tests.
+
+*   **Security Note:** The tests properly validate authentication requirements for protected endpoints. You SHOULD ensure comprehensive coverage of unauthorized access scenarios and CSRF protection testing.

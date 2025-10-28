@@ -63,9 +63,9 @@ async def dashboard_home(request: Request):
         logger.info(f"Dashboard accessed by user {user['username']}")
 
         return request.app.state.templates.TemplateResponse(
+            request,
             "dashboard/home.html",
             {
-                "request": request,
                 "user": user,
                 "csrf_token": csrf_token,
                 "stats": stats,
@@ -113,10 +113,10 @@ async def posts_list(request: Request):
         logger.info(f"Posts list accessed by user {user['username']}, showing {len(all_posts)} posts")
 
         return request.app.state.templates.TemplateResponse(
+            request,
             "dashboard/posts_list.html",
             {
-                "request": request,
-                "user": user,
+                                "user": user,
                 "csrf_token": csrf_token,
                 "all_posts": all_posts,
                 "published_posts": published_posts,
@@ -145,10 +145,10 @@ async def new_post(request: Request):
     csrf_token = get_csrf_token(request)
 
     return request.app.state.templates.TemplateResponse(
+        request,
         "dashboard/post_edit.html",
         {
-            "request": request,
-            "user": user,
+                        "user": user,
             "csrf_token": csrf_token,
             "title": "New Post - Dashboard",
             "is_edit": False,
@@ -182,10 +182,10 @@ async def edit_post(request: Request, slug: str):
         logger.info(f"Edit post form accessed for '{slug}' by user {user['username']}")
 
         return request.app.state.templates.TemplateResponse(
+            request,
             "dashboard/post_edit.html",
             {
-                "request": request,
-                "user": user,
+                                "user": user,
                 "csrf_token": csrf_token,
                 "post": post,
                 "title": f"Edit: {post.frontmatter.title} - Dashboard",
@@ -212,10 +212,10 @@ async def settings(request: Request):
     csrf_token = get_csrf_token(request)
 
     return request.app.state.templates.TemplateResponse(
+        request,
         "dashboard/settings.html",
         {
-            "request": request,
-            "user": user,
+                        "user": user,
             "csrf_token": csrf_token,
             "title": "Settings - Dashboard",
             "current_year": datetime.now().year
@@ -238,10 +238,10 @@ async def pages_list(request: Request):
     # For now, just show a placeholder page
     # This will be implemented in future iterations
     return request.app.state.templates.TemplateResponse(
+        request,
         "dashboard/pages_list.html",
         {
-            "request": request,
-            "user": user,
+                        "user": user,
             "csrf_token": csrf_token,
             "title": "Pages - Dashboard",
             "pages": [],

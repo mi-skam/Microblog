@@ -192,7 +192,7 @@ class TestDashboardIntegration:
         os.environ['MICROBLOG_CONFIG'] = str(temp_project_dir['config'])
 
         try:
-            # Mock authentication to avoid database issues
+            # Mock authentication components instead of bypassing middleware
             mock_user = {
                 'user_id': 1,
                 'username': 'admin',
@@ -201,29 +201,29 @@ class TestDashboardIntegration:
             }
 
             with patch('microblog.utils.get_content_dir', return_value=temp_project_dir['content']), \
-                 patch('microblog.server.middleware.get_csrf_token', return_value='test-csrf-token'):
+                 patch('microblog.auth.jwt_handler.verify_jwt_token', return_value=mock_user), \
+                 patch('microblog.server.middleware.get_csrf_token', return_value='test-csrf-token'), \
+                 patch('microblog.server.config.get_config_manager') as mock_config_manager:
 
-                # Create a test app without authentication middleware
-                from fastapi import FastAPI
+                # Mock config manager to avoid file loading issues
+                from unittest.mock import Mock
+                mock_config = Mock()
+                mock_config.site.url = 'http://test.example.com'
+                mock_config.auth.session_expires = 3600
+                mock_config.server.host = '127.0.0.1'
+                mock_config.server.port = 8000
+                mock_config.site.title = 'Test Blog'
+                mock_config_manager.return_value.config = mock_config
+                mock_config_manager.return_value.start_watcher = Mock()
+                mock_config_manager.return_value.stop_watcher = Mock()
+
+                # Use the proper create_app function with all middleware
+                from microblog.server.app import create_app
+                app = create_app(dev_mode=True)
+
+                # Override templates to use our test templates
                 from fastapi.templating import Jinja2Templates
-
-                from microblog.server.routes import auth, dashboard
-
-                app = FastAPI(title="Test Microblog", debug=True)
-
-                # Set up templates
                 app.state.templates = Jinja2Templates(directory=str(temp_project_dir['templates']))
-
-                # Add a simple middleware to set authenticated state
-                @app.middleware("http")
-                async def auth_bypass_middleware(request, call_next):
-                    request.state.user = mock_user
-                    request.state.authenticated = True
-                    return await call_next(request)
-
-                # Register routes
-                app.include_router(auth.router)
-                app.include_router(dashboard.router)
 
                 client = TestClient(app)
                 return client
@@ -243,29 +243,29 @@ class TestDashboardIntegration:
 
         try:
             with patch('microblog.utils.get_content_dir', return_value=temp_project_dir['content']), \
-                 patch('microblog.server.middleware.get_csrf_token', return_value='test-csrf-token'):
+                 patch('microblog.auth.jwt_handler.verify_jwt_token', return_value=None), \
+                 patch('microblog.server.middleware.get_csrf_token', return_value='test-csrf-token'), \
+                 patch('microblog.server.config.get_config_manager') as mock_config_manager:
 
-                # Create a test app that simulates unauthenticated state
-                from fastapi import FastAPI
+                # Mock config manager to avoid file loading issues
+                from unittest.mock import Mock
+                mock_config = Mock()
+                mock_config.site.url = 'http://test.example.com'
+                mock_config.auth.session_expires = 3600
+                mock_config.server.host = '127.0.0.1'
+                mock_config.server.port = 8000
+                mock_config.site.title = 'Test Blog'
+                mock_config_manager.return_value.config = mock_config
+                mock_config_manager.return_value.start_watcher = Mock()
+                mock_config_manager.return_value.stop_watcher = Mock()
+
+                # Use the proper create_app function with all middleware
+                from microblog.server.app import create_app
+                app = create_app(dev_mode=True)
+
+                # Override templates to use our test templates
                 from fastapi.templating import Jinja2Templates
-
-                from microblog.server.routes import auth, dashboard
-
-                app = FastAPI(title="Test Microblog", debug=True)
-
-                # Set up templates
                 app.state.templates = Jinja2Templates(directory=str(temp_project_dir['templates']))
-
-                # Add middleware that leaves user unauthenticated
-                @app.middleware("http")
-                async def unauth_middleware(request, call_next):
-                    # Don't set authenticated state (leave it None/False)
-                    request.state.authenticated = False
-                    return await call_next(request)
-
-                # Register routes
-                app.include_router(auth.router)
-                app.include_router(dashboard.router)
 
                 return TestClient(app)
         finally:

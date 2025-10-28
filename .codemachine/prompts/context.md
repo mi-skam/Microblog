@@ -68,49 +68,80 @@ The following are the relevant sections from the architecture and plan documents
     *   **Build Output Validation**: Generated HTML validation, link checking, and asset verification
 ```
 
-### Context: task-i4-t8 (from 02_Iteration_I4.md)
+### Context: api-design-communication (from 04_Behavior_and_Communication.md)
 
 ```markdown
-    <!-- anchor: task-i4-t8 -->
-    *   **Task 4.8:**
-        *   **Task ID:** `I4.T8`
-        *   **Description:** Create integration tests for dashboard functionality including authentication flows, post management operations, and form submissions. Test complete user workflows.
-        *   **Agent Type Hint:** `TestingAgent`
-        *   **Inputs:** Dashboard implementation, user workflow requirements, integration testing patterns
-        *   **Input Files:** ["microblog/server/app.py", "microblog/server/routes/dashboard.py", "tests/conftest.py"]
-        *   **Target Files:** ["tests/integration/test_dashboard.py", "tests/integration/test_auth_flows.py"]
-        *   **Deliverables:** Integration test suite for dashboard functionality and user workflows
-        *   **Acceptance Criteria:** All dashboard routes tested, authentication flows verified, form submissions tested, user workflows covered, test coverage >80%
-        *   **Dependencies:** `I4.T6`, `I4.T7`
-        *   **Parallelizable:** Yes
+### 3.7. API Design & Communication
+
+**API Style:** RESTful HTTP API with HTMX Enhancement
+
+The MicroBlog system employs a RESTful API design enhanced with HTMX for dynamic interactions. This approach provides a traditional web application experience while enabling progressive enhancement through AJAX-style interactions without complex JavaScript frameworks.
+
+**API Design Principles:**
+- **REST-compliant**: Standard HTTP methods (GET, POST, PUT, DELETE) with semantic URLs
+- **HTML-first**: Primary responses are HTML fragments for HTMX consumption
+- **Progressive Enhancement**: All functionality works with and without JavaScript
+- **Stateless**: JWT-based authentication eliminates server-side session management
+- **CSRF Protection**: All state-changing operations include CSRF token validation
+
+**API Categories:**
+
+1. **Authentication Endpoints**
+   - `POST /auth/login` - User authentication with credential validation
+   - `POST /auth/logout` - Session termination and cookie clearing
+   - `GET /auth/check` - Session validation for protected routes
+
+2. **Dashboard Page Routes**
+   - `GET /dashboard` - Main dashboard with post listing
+   - `GET /dashboard/posts/new` - New post creation form
+   - `GET /dashboard/posts/{id}/edit` - Post editing interface
+   - `GET /dashboard/settings` - Configuration management interface
+
+3. **HTMX API Endpoints**
+   - `POST /api/posts` - Create new post with live feedback
+   - `PUT /api/posts/{id}` - Update existing post content
+   - `DELETE /api/posts/{id}` - Delete post with confirmation
+   - `POST /api/posts/{id}/publish` - Toggle post publication status
+   - `POST /api/build` - Trigger site rebuild with progress updates
+   - `POST /api/images` - Handle image uploads with validation
 ```
 
-### Context: project-overview (from 01_Plan_Overview_and_Setup.md)
+### Context: error-handling-api (from 04_Behavior_and_Communication.md)
 
 ```markdown
-## 1. Project Overview
+**API Error Handling:**
 
-*   **Goal:** Develop a lightweight, self-hosted blogging platform that generates static HTML pages for performance while providing a dynamic HTMX-powered dashboard for content management.
-*   **High-Level Requirements Summary:**
-    *   Single-user authentication with JWT-based session management
-    *   Markdown-based post creation and editing with YAML frontmatter
-    *   Static site generation with full rebuild strategy (<5s for 100 posts)
-    *   HTMX-enhanced dashboard for CRUD operations without full page refreshes
-    *   Filesystem-based image storage with automatic build-time copying
-    *   Tag-based content organization and RSS feed generation
-    *   CLI tools for build, serve, and user management operations
-    *   Build backup and atomic rollback mechanisms for reliability
-    *   Configuration hot-reload in development mode
-    *   Live markdown preview during content editing
-*   **Key Assumptions:**
-    *   Single-user design eliminates complex permission systems
-    *   Content volume will not exceed 1,000 posts (performance tested)
-    *   Users have basic familiarity with markdown syntax
-    *   Full rebuild strategy is acceptable for target content volume
-    *   Users will implement their own content backup strategy (Git recommended)
-    *   Dashboard usage occurs on trusted networks (localhost or VPN)
-    *   Images are pre-optimized before upload (no automatic compression)
-    *   Filesystem has sufficient read/write permissions for operations
+**Standard HTTP Status Codes:**
+- `200 OK`: Successful operation
+- `201 Created`: Resource created successfully
+- `400 Bad Request`: Invalid input data or validation errors
+- `401 Unauthorized`: Authentication required or failed
+- `403 Forbidden`: CSRF token invalid or insufficient permissions
+- `404 Not Found`: Requested resource does not exist
+- `422 Unprocessable Entity`: Validation errors with detailed field information
+- `500 Internal Server Error`: Unexpected server error
+
+**Error Response Format:**
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid post data provided",
+    "details": {
+      "title": ["Title is required and must be between 1-200 characters"],
+      "content": ["Content cannot be empty"]
+    }
+  }
+}
+```
+
+**HTMX Error Handling:**
+```html
+<!-- Error responses return HTML fragments for display -->
+<div class="error-message" hx-swap-oob="true" id="error-container">
+  <p>Failed to save post. Please check your inputs and try again.</p>
+</div>
+```
 ```
 
 ### Context: directory-structure (from 01_Plan_Overview_and_Setup.md)
@@ -224,37 +255,39 @@ The following analysis is based on my direct review of the current codebase. Use
 ### Relevant Existing Code
 
 *   **File:** `tests/conftest.py`
-    *   **Summary:** This file contains comprehensive shared test fixtures including temporary config files, mock configuration data, content directories, and test utilities. It provides excellent patterns for creating test environments.
-    *   **Recommendation:** You MUST reuse the existing fixtures from this file, especially `valid_config_data`, `temp_config_file`, and `temp_content_dir`. The mock callback pattern is also useful for testing configuration reloading.
-
-*   **File:** `microblog/server/app.py`
-    *   **Summary:** This file contains the FastAPI application factory with complete middleware setup, route registration, and startup/shutdown event handlers. It includes security headers, CSRF protection, authentication middleware, and development mode configuration.
-    *   **Recommendation:** You SHOULD import and use the `create_app()` function from this file for creating test application instances. The application factory pattern is already implemented correctly with dev_mode support.
-
-*   **File:** `microblog/server/routes/dashboard.py`
-    *   **Summary:** This file implements all dashboard routes including dashboard home, posts listing, post editing forms, settings, and API endpoints for post creation/updating. It uses proper authentication middleware integration and error handling.
-    *   **Recommendation:** You MUST test all the routes defined in this file. Pay special attention to the API endpoints `/api/posts` and `/api/posts/{slug}` which handle form submissions. The error handling patterns and authentication checks should be thoroughly tested.
+    *   **Summary:** Contains comprehensive shared test fixtures including temp config files, valid/invalid config data, content directories, and mock callback utilities. Provides excellent patterns for setting up test environments.
+    *   **Recommendation:** You MUST import and use the existing fixtures like `valid_config_data`, `temp_project_dir`, and mock utilities to maintain consistency with the existing test patterns.
 
 *   **File:** `tests/integration/test_dashboard.py`
-    *   **Summary:** This file already contains extensive integration tests for dashboard functionality including authentication mocking, template creation, post service mocking, and complete workflow testing. It demonstrates excellent testing patterns.
-    *   **Recommendation:** You SHOULD examine the existing test patterns carefully. The file shows how to mock authentication, create temporary project directories, set up templates, and test complete workflows. The test structure is well-organized and comprehensive.
+    *   **Summary:** Existing integration tests for dashboard functionality with comprehensive fixtures for temp project setup, mock templates, and test client creation. Contains patterns for authenticated/unauthenticated testing.
+    *   **Recommendation:** You SHOULD build upon the existing test patterns and fixtures. The file already has extensive dashboard tests - you need to ensure complete coverage rather than duplicate.
 
 *   **File:** `tests/integration/test_auth_flows.py`
-    *   **Summary:** This file contains comprehensive authentication flow testing including login/logout workflows, CSRF protection, JWT token handling, session management, and security validation. It demonstrates proper authentication testing patterns.
-    *   **Recommendation:** You SHOULD review the authentication testing patterns. The file shows excellent examples of mocking authentication components, testing security features, and validating complete authentication workflows.
+    *   **Summary:** Comprehensive authentication flow tests including login/logout workflows, CSRF protection, JWT handling, and complete authentication lifecycle testing with proper mocking.
+    *   **Recommendation:** This file contains excellent patterns for authentication testing. You MUST use similar mocking strategies and ensure your tests integrate with these existing patterns.
+
+*   **File:** `microblog/server/app.py`
+    *   **Summary:** FastAPI application factory with proper middleware layering (CORS, Security Headers, CSRF, Authentication), route registration, static file mounting, and template configuration.
+    *   **Recommendation:** You MUST understand the middleware layers when testing. The app uses SecurityHeadersMiddleware, CSRFProtectionMiddleware, and AuthenticationMiddleware in specific order.
+
+*   **File:** `microblog/server/routes/dashboard.py`
+    *   **Summary:** Dashboard routes with comprehensive CRUD operations, form handling, and API endpoints. Includes proper error handling, logging, and security checks.
+    *   **Recommendation:** You MUST test all routes defined here including GET routes (/dashboard/, /posts, /posts/new, /posts/{slug}/edit, /settings, /pages) and POST routes (/api/posts, /api/posts/{slug}).
 
 ### Implementation Tips & Notes
 
-*   **Tip:** I found that both target test files already exist and contain comprehensive test suites. The tests are well-structured and cover the major functionality. However, you should review them for completeness against the acceptance criteria.
+*   **Tip:** The existing test files show excellent patterns for mocking authentication middleware. Use `patch('microblog.server.middleware.get_current_user')` and `patch('microblog.server.middleware.get_csrf_token')` to control authentication state.
 
-*   **Note:** The existing tests use extensive mocking with `unittest.mock.patch` to isolate components and avoid database dependencies. This pattern should be continued for any additional tests you write.
+*   **Note:** The project uses a sophisticated test setup with temporary project directories that include template creation, config file setup, and content structure. Follow the `temp_project_dir` fixture pattern from existing tests.
 
-*   **Warning:** The tests require proper environment setup with `MICROBLOG_CONFIG` environment variable and mocked `get_content_dir()` function. Make sure to follow the existing patterns for environment setup to avoid test failures.
+*   **Warning:** The dashboard routes rely heavily on post service interactions. You MUST mock `get_post_service()` and its methods like `list_posts()`, `create_post()`, `update_post()`, `get_post_by_slug()` to avoid dependencies on actual file system operations.
 
-*   **Tip:** The test files show excellent examples of testing complete user workflows, including multi-step processes like post creation → editing → publishing. The task requires testing "complete user workflows" so ensure these patterns are comprehensive.
+*   **Tip:** Form submissions use FastAPI's Form(...) parameters. Your tests need to submit form data with proper CSRF tokens. Use the existing pattern of including `csrf_token` in form data.
 
-*   **Note:** The existing tests achieve good coverage of authentication flows, dashboard routes, form submissions, and error handling. Pay special attention to CSRF protection testing and authentication requirement validation.
+*   **Note:** The tests show both authenticated and unauthenticated clients are needed. The existing fixtures demonstrate how to mock different authentication states using middleware patches.
 
-*   **Tip:** The test fixtures in `conftest.py` provide excellent utilities for creating temporary project structures, configuration files, and mock data. These should be reused extensively in your tests.
+*   **Critical:** The acceptance criteria requires >80% test coverage. You need to ensure all dashboard routes, form submissions, error handling, and user workflows are thoroughly tested. Check the existing test files to avoid gaps.
 
-*   **Note:** Since the acceptance criteria requires ">80% test coverage", you should ensure that any gaps in the existing test coverage are filled. Focus on edge cases, error conditions, and integration points between components.
+*   **Integration Pattern:** Tests should verify complete workflows like: 1) Access login page → 2) Submit credentials → 3) Access dashboard → 4) Create post → 5) Edit post → 6) Logout → 7) Verify access denied.
+
+*   **Error Testing:** You MUST test error scenarios including validation errors, missing posts, authentication failures, and server errors. The dashboard routes have comprehensive error handling that needs verification.

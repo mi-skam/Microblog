@@ -57,9 +57,9 @@ async def login_page(request: Request):
     csrf_token = get_csrf_token(request)
 
     return request.app.state.templates.TemplateResponse(
+        request,
         "auth/login.html",
         {
-            "request": request,
             "csrf_token": csrf_token,
             "title": "Login - Microblog"
         }
@@ -113,9 +113,9 @@ async def login(
         # Return error for invalid credentials
         csrf_token = get_csrf_token(request)
         return request.app.state.templates.TemplateResponse(
+            request,
             "auth/login.html",
             {
-                "request": request,
                 "csrf_token": csrf_token,
                 "error": "Invalid username or password",
                 "title": "Login - Microblog"
@@ -262,9 +262,9 @@ async def logout_get(request: Request):
     csrf_token = get_csrf_token(request)
 
     return request.app.state.templates.TemplateResponse(
+        request,
         "auth/logout.html",
         {
-            "request": request,
             "csrf_token": csrf_token,
             "title": "Logout - Microblog"
         }

@@ -10,17 +10,17 @@ This is the full specification of the task you must complete.
 
 ```json
 {
-  "task_id": "I5.T3",
+  "task_id": "I5.T4",
   "iteration_id": "I5",
   "iteration_goal": "Implement HTMX-enhanced interactivity, live markdown preview, image management, and build system integration with the dashboard",
-  "description": "Implement live markdown preview functionality with HTMX, debounced input handling, and real-time HTML rendering. Create preview pane in post editing interface.",
+  "description": "Create image upload service with file validation, filename sanitization, and storage management. Implement upload endpoint with progress feedback and markdown snippet generation.",
   "agent_type_hint": "BackendAgent",
-  "inputs": "Live preview requirements, HTMX patterns, debouncing strategy, markdown rendering",
-  "target_files": ["microblog/server/routes/api.py", "templates/dashboard/post_edit.html", "static/js/dashboard.js"],
-  "input_files": ["microblog/server/routes/api.py", "microblog/builder/markdown_processor.py", "templates/dashboard/post_edit.html"],
-  "deliverables": "Live markdown preview, HTMX integration, debounced input handling, preview interface",
-  "acceptance_criteria": "Preview updates in real-time with 500ms delay, markdown renders correctly, preview pane responsive, no performance issues",
-  "dependencies": ["I5.T1", "I3.T2"],
+  "inputs": "Image management requirements, upload validation, security considerations",
+  "target_files": ["microblog/content/image_service.py", "microblog/server/routes/api.py"],
+  "input_files": ["microblog/server/config.py"],
+  "deliverables": "Image upload service, file validation, storage management, upload endpoint, markdown integration",
+  "acceptance_criteria": "File uploads work correctly, validation prevents invalid files, filenames sanitized for security, markdown snippets generated, progress feedback functional",
+  "dependencies": ["I5.T1"],
   "parallelizable": true,
   "done": false
 }
@@ -32,132 +32,84 @@ This is the full specification of the task you must complete.
 
 The following are the relevant sections from the architecture and plan documents, which I found by analyzing the task description.
 
-### Context: key-interaction-flow (from 04_Behavior_and_Communication.md)
+### Context: key-entities (from 03_System_Structure_and_Data.md)
 
 ```markdown
-**Key Interaction Flow (Sequence Diagram):**
+**Key Entities:**
 
-**Description:** This diagram illustrates the complete workflow for user authentication and post creation, showing the interaction between the web browser, dashboard application, authentication system, and content storage.
-
-== Live Preview Flow ==
-author -> browser : Type in markdown editor
-note right : 500ms debounce
-browser -> dashboard : POST /api/preview (HTMX)
-dashboard -> posts : Render markdown
-posts -> dashboard : HTML preview
-dashboard -> browser : HTML fragment
-browser -> author : Live preview updated
+1. **User**: Single admin user with authentication credentials (stored in SQLite)
+2. **Post**: Blog posts with metadata and content (stored as markdown files with YAML frontmatter)
+3. **Image**: Media files referenced in posts (stored in filesystem with metadata tracking)
+4. **Configuration**: System settings and blog metadata (stored as YAML configuration file)
+5. **Session**: Authentication sessions (stateless JWT tokens, no persistent storage)
 ```
 
-### Context: htmx-integration (from 04_Behavior_and_Communication.md)
+### Context: data-model-diagram (from 03_System_Structure_and_Data.md)
 
 ```markdown
-**HTMX Integration Patterns:**
-
-1. **Live Form Validation**
-```html
-<input name="title"
-       hx-post="/api/validate/title"
-       hx-trigger="blur"
-       hx-target="#title-feedback">
-```
-
-2. **Dynamic Content Updates**
-```html
-<button hx-delete="/api/posts/123"
-        hx-confirm="Delete this post?"
-        hx-target="#post-123"
-        hx-swap="outerHTML">Delete</button>
-```
-
-3. **Live Markdown Preview**
-```html
-<textarea name="content"
-          hx-post="/api/preview"
-          hx-trigger="keyup changed delay:500ms"
-          hx-target="#preview-pane">
-```
-
-4. **Build Progress Updates**
-```html
-<button hx-post="/api/build"
-        hx-target="#build-status"
-        hx-indicator="#build-spinner">Rebuild Site</button>
-```
-```
-
-### Context: error-handling-api (from 04_Behavior_and_Communication.md)
-
-```markdown
-**API Error Handling:**
-
-**Standard HTTP Status Codes:**
-- `200 OK`: Successful operation
-- `201 Created`: Resource created successfully
-- `400 Bad Request`: Invalid input data or validation errors
-- `401 Unauthorized`: Authentication required or failed
-- `403 Forbidden`: CSRF token invalid or insufficient permissions
-- `404 Not Found`: Requested resource does not exist
-- `422 Unprocessable Entity`: Validation errors with detailed field information
-- `500 Internal Server Error`: Unexpected server error
-
-**Error Response Format:**
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Invalid post data provided",
-    "details": {
-      "title": ["Title is required and must be between 1-200 characters"],
-      "content": ["Content cannot be empty"]
-    }
-  }
+entity "Image File" as image {
+  --
+  **File Metadata**
+  filename : VARCHAR(255)
+  file_path : VARCHAR(500)
+  file_size : INTEGER
+  mime_type : VARCHAR(100)
+  upload_date : TIMESTAMP
+  --
+  **References**
+  referenced_in_posts : ARRAY[VARCHAR]
 }
+
+note top of image : Stored in content/images/\nSupported: jpg, png, gif, webp, svg\nCopied to build/images/
 ```
 
-**HTMX Error Handling:**
-```html
-<!-- Error responses return HTML fragments for display -->
-<div class="error-message" hx-swap-oob="true" id="error-container">
-  <p>Failed to save post. Please check your inputs and try again.</p>
-</div>
-```
-```
-
-### Context: api-endpoints-detail (from 04_Behavior_and_Communication.md)
+### Context: data-storage-strategy (from 03_System_Structure_and_Data.md)
 
 ```markdown
-**Detailed API Endpoints:**
-
-**Image Upload Endpoint:**
-```
-POST /api/images
-Headers: Cookie: jwt=...; X-CSRF-Token: ...
-Content-Type: multipart/form-data
-Body: file=@image.jpg
-Response: 201 Created + JSON with image URL and markdown snippet
-{
-  "filename": "2025-10-26-image.jpg",
-  "url": "../images/2025-10-26-image.jpg",
-  "markdown": "![Image description](../images/2025-10-26-image.jpg)"
-}
-```
+**File System Storage (content/):**
+- Markdown files with YAML frontmatter for posts
+- Images stored in organized directory structure
+- Configuration as human-readable YAML
+- Version control friendly (Git integration possible)
+- Direct file system access for build process
 ```
 
-### Context: task-i5-t3 (from 02_Iteration_I5.md)
+### Context: security-considerations (from 05_Operational_Architecture.md)
 
 ```markdown
-    *   **Task 5.3:**
-        *   **Task ID:** `I5.T3`
-        *   **Description:** Implement live markdown preview functionality with HTMX, debounced input handling, and real-time HTML rendering. Create preview pane in post editing interface.
-        *   **Agent Type Hint:** `BackendAgent`
-        *   **Inputs:** Live preview requirements, HTMX patterns, debouncing strategy, markdown rendering
-        *   **Input Files:** ["microblog/server/routes/api.py", "microblog/builder/markdown_processor.py", "templates/dashboard/post_edit.html"]
-        *   **Target Files:** ["microblog/server/routes/api.py", "templates/dashboard/post_edit.html", "static/js/dashboard.js"]
-        *   **Deliverables:** Live markdown preview, HTMX integration, debounced input handling, preview interface
-        *   **Acceptance Criteria:** Preview updates in real-time with 500ms delay, markdown renders correctly, preview pane responsive, no performance issues
-        *   **Dependencies:** `I5.T1`, `I3.T2`
-        *   **Parallelizable:** Yes
+**Input Validation & Sanitization:**
+- **Markdown Sanitization**: HTML escaping by default to prevent XSS attacks
+- **File Upload Validation**: Extension whitelist, MIME type verification, size limits
+- **Path Traversal Prevention**: Filename sanitization and directory boundary enforcement
+- **SQL Injection Prevention**: Parameterized queries for all database operations
+- **Command Injection Prevention**: No direct shell execution from user input
+```
+
+### Context: component-diagram (from 03_System_Structure_and_Data.md)
+
+```markdown
+Component(image_service, "Image Management Service", "Python Service", "Handles image upload and organization")
+
+Rel(api_routes, image_service, "Uses")
+Rel(image_service, content_repository, "Uses")
+
+note right of post_service : Handles post validation\nMarkdown processing\nDraft/publish logic
+```
+
+### Context: task-i5-t4 (from 02_Iteration_I5.md)
+
+```markdown
+*   **Task 5.4:**
+    *   **Task ID:** `I5.T4`
+    *   **Description:** Create image upload service with file validation, filename sanitization, and storage management. Implement upload endpoint with progress feedback and markdown snippet generation.
+    *   **Agent Type Hint:** `BackendAgent`
+    *   **Inputs:** Image management requirements, upload validation, security considerations
+    *   **Input Files:** ["microblog/server/config.py"]
+    *   **Target Files:** ["microblog/content/image_service.py", "microblog/server/routes/api.py"]
+    *   **Deliverables:** Image upload service, file validation, storage management, upload endpoint, markdown integration
+    *   **Acceptance Criteria:** File uploads work correctly, validation prevents invalid files, filenames sanitized for security, markdown snippets generated, progress feedback functional
+    *   **Dependencies:** `I5.T1`
+    *   **Parallelizable:** Yes
 ```
 
 ---
@@ -167,37 +119,27 @@ Response: 201 Created + JSON with image URL and markdown snippet
 The following analysis is based on my direct review of the current codebase. Use these notes and tips to guide your implementation.
 
 ### Relevant Existing Code
-
 *   **File:** `microblog/server/routes/api.py`
-    *   **Summary:** This file contains HTMX API endpoints for dynamic post operations (create, update, delete, publish/unpublish). It follows a clear pattern of returning HTML fragments and includes proper error handling with helper functions `_create_error_fragment()` and `_create_success_fragment()`.
-    *   **Recommendation:** You MUST add a new endpoint `/api/preview` to this file following the exact same pattern. The existing endpoints use Form data, proper authentication via `require_authentication()`, and CSRF protection. Import the markdown processor from `microblog.builder.markdown_processor` and use its `process_markdown_text()` method.
+    *   **Summary:** This file contains existing HTMX API endpoints for post operations, including a well-established pattern for HTML fragment responses, error handling, and authentication.
+    *   **Recommendation:** You MUST follow the same patterns used in this file for HTMX responses. The file already imports `require_authentication` from middleware, uses `HTMLResponse`, and implements error/success fragment helpers. ADD your image upload endpoint here using the same conventions.
 
-*   **File:** `microblog/builder/markdown_processor.py`
-    *   **Summary:** This file provides a comprehensive markdown processing engine with frontmatter support, syntax highlighting, and content validation. It has a global singleton pattern with `get_markdown_processor()` function and includes methods like `process_markdown_text()` for converting raw markdown to HTML.
-    *   **Recommendation:** You MUST import and use the `get_markdown_processor()` function and call its `process_markdown_text()` method for the preview functionality. This ensures consistency with the build system and maintains the same markdown rendering extensions.
+*   **File:** `microblog/builder/asset_manager.py`
+    *   **Summary:** This file contains comprehensive file validation, security checks, and asset management logic. It includes allowed file extensions, MIME type checking, size limits (50MB), and security validation for images.
+    *   **Recommendation:** You MUST reuse the validation logic from `AssetManager.validate_file()` method. This method already handles extension validation (`.jpg`, `.jpeg`, `.png`, `.gif`, `.svg`, `.webp`, `.ico`, `.bmp`), file size limits, MIME type checking, and security filters.
 
-*   **File:** `templates/dashboard/post_edit.html`
-    *   **Summary:** This file contains a comprehensive post editing form with proper styling, JavaScript for slug generation, and a hidden preview panel (line 103-106) that's already scaffolded but not functional. It extends the dashboard layout and includes HTMX via the layout template.
-    *   **Recommendation:** You MUST modify this file to make the preview panel functional. Add HTMX attributes to the content textarea (id="content" on line 85) with proper debouncing. The preview panel div already exists with id="markdown-preview" - you just need to make it visible and wire it up.
+*   **File:** `microblog/server/config.py`
+    *   **Summary:** This file provides configuration management but currently doesn't include upload-specific settings like file size limits or allowed extensions.
+    *   **Recommendation:** You SHOULD extend the configuration classes to add image upload settings if needed, but the AssetManager already has sensible defaults you can use.
 
-*   **File:** `templates/dashboard/layout.html`
-    *   **Summary:** This file includes HTMX library (line 19) and configures CSRF token handling for all HTMX requests (lines 148-155). It provides the base structure for all dashboard pages.
-    *   **Recommendation:** The HTMX setup is already complete. You can rely on the existing CSRF token configuration and don't need to modify this file.
+*   **File:** `microblog/utils.py`
+    *   **Summary:** This file contains utility functions for directory management (`ensure_directory`) and path handling (`get_content_dir`).
+    *   **Recommendation:** You MUST use `get_content_dir()` to construct paths to the images directory and `ensure_directory()` to create directories as needed.
 
 ### Implementation Tips & Notes
-
-*   **Tip:** The architecture documentation shows the exact HTMX pattern for live preview: `hx-trigger="keyup changed delay:500ms"` which provides the required 500ms debouncing.
-
-*   **Tip:** I found that the preview panel HTML structure already exists in `post_edit.html` but is hidden with `style="display: none;"`. You just need to show it and wire up the HTMX functionality.
-
-*   **Note:** The existing API endpoints in `api.py` all follow the same pattern: authentication check, form data parsing, service calls, and HTML fragment responses. Your preview endpoint should follow this same pattern.
-
-*   **Warning:** The task mentions creating `static/js/dashboard.js` but I found that the `static/js/` directory is empty. You should create this file for any custom JavaScript that enhances the HTMX functionality, but the core preview functionality should work entirely through HTMX attributes.
-
-*   **Tip:** The markdown processor has comprehensive error handling with `MarkdownProcessingError`. Make sure to catch these exceptions in your preview endpoint and return appropriate error fragments.
-
-*   **Note:** The existing form submission in `post_edit.html` uses custom JavaScript (lines 282-325). You should ensure your preview functionality doesn't interfere with this existing behavior.
-
-*   **Recommendation:** Follow the exact same HTML fragment response pattern as other API endpoints. Return raw HTML that can be inserted into the preview pane, not JSON responses.
-
-*   **Security Note:** The preview endpoint should use the same authentication and CSRF protection patterns as existing endpoints. The `require_authentication()` middleware and CSRF token handling are already established patterns.
+*   **Tip:** The project already has `python-multipart` and `aiofiles` dependencies installed (from pyproject.toml), which are perfect for handling file uploads with FastAPI.
+*   **Note:** The existing API endpoints use Form fields and return HTMLResponse with specific HTMX patterns. Your image upload endpoint should follow this exact pattern for consistency.
+*   **Warning:** The AssetManager already defines security validation that prevents executable files, checks MIME types, and validates file extensions. You MUST reuse this logic rather than implementing your own.
+*   **Tip:** The content/images/ directory already exists and the AssetManager is configured to copy files from there to build/images/ during site generation.
+*   **Note:** For markdown snippet generation, you should generate relative URLs that will work both in the dashboard preview and the final static site (e.g., `/images/filename.jpg`).
+*   **Security:** Follow the existing pattern of requiring authentication with `require_authentication(request)` and ensure CSRF protection is handled by the middleware.
+*   **Pattern:** Use the existing `_create_error_fragment()` and `_create_success_fragment()` helper functions for consistent HTMX responses.

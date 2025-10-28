@@ -8,12 +8,17 @@ HTML fragments instead of JSON responses for seamless frontend integration.
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse
 
 from microblog.builder.markdown_processor import (
     MarkdownProcessingError,
     get_markdown_processor,
+)
+from microblog.content.image_service import (
+    ImageUploadError,
+    ImageValidationError,
+    get_image_service,
 )
 from microblog.content.post_service import (
     PostFileError,
@@ -447,4 +452,174 @@ async def preview_markdown_htmx(
         return HTMLResponse(
             content="<div class='error-preview'><p><strong>Preview Error:</strong> Unable to generate preview</p></div>",
             status_code=200  # Return 200 to allow HTMX to display the error
+        )
+
+
+@router.post("/images/upload", response_class=HTMLResponse)
+async def upload_image_htmx(
+    request: Request,
+    file: UploadFile = File(...)
+):
+    """
+    Upload an image file via HTMX API.
+
+    Args:
+        file: Uploaded image file
+
+    Returns:
+        HTML fragment with success message and markdown snippet or error details
+    """
+    try:
+        # Require authentication
+        user = require_authentication(request)
+
+        # CSRF validation is handled by middleware for /api/ paths
+
+        if not file.filename:
+            return HTMLResponse(
+                content=_create_error_fragment("No file selected"),
+                status_code=422
+            )
+
+        # Check if file has content
+        file_content = await file.read()
+        if not file_content:
+            return HTMLResponse(
+                content=_create_error_fragment("Uploaded file is empty"),
+                status_code=422
+            )
+
+        # Reset file pointer
+        await file.seek(0)
+
+        # Get image service
+        image_service = get_image_service()
+
+        # Save the uploaded file
+        result = await image_service.save_uploaded_file_async(file.file, file.filename)
+
+        logger.info(f"Image uploaded via HTMX by user {user['username']}: {result['filename']}")
+
+        # Return success fragment with markdown snippet and file info
+        success_html = f'''
+        <div class="alert alert-success" hx-swap-oob="true" id="success-container">
+            <p>Image "{result['filename']}" uploaded successfully!</p>
+            <div class="upload-result mt-2">
+                <p><strong>Markdown snippet:</strong></p>
+                <div class="code-block">
+                    <code>{result['markdown']}</code>
+                    <button type="button" class="btn btn-sm btn-outline-secondary ms-2"
+                            onclick="navigator.clipboard.writeText('{result['markdown']}')">
+                        Copy
+                    </button>
+                </div>
+                <p class="text-muted mt-2">
+                    File size: {result['size']:,} bytes |
+                    URL: <code>{result['url']}</code>
+                </p>
+            </div>
+        </div>
+        <div hx-swap-oob="innerHTML:#file-input-container">
+            <input type="file"
+                   class="form-control"
+                   name="file"
+                   accept="image/*"
+                   hx-post="/api/images/upload"
+                   hx-encoding="multipart/form-data"
+                   hx-indicator="#upload-indicator">
+            <div class="form-text">
+                Supported formats: JPG, PNG, GIF, SVG, WebP, ICO, BMP (max 50MB)
+            </div>
+        </div>
+        '''
+
+        return HTMLResponse(content=success_html, status_code=201)
+
+    except ImageValidationError as e:
+        logger.error(f"Image validation error in upload: {e}")
+        return HTMLResponse(
+            content=_create_error_fragment(f"Validation error: {str(e)}"),
+            status_code=422
+        )
+    except ImageUploadError as e:
+        logger.error(f"Image upload error: {e}")
+        return HTMLResponse(
+            content=_create_error_fragment(f"Upload error: {str(e)}"),
+            status_code=500
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error uploading image via HTMX: {e}")
+        return HTMLResponse(
+            content=_create_error_fragment("An unexpected error occurred while uploading the image"),
+            status_code=500
+        )
+
+
+@router.get("/images", response_class=HTMLResponse)
+async def list_images_htmx(request: Request):
+    """
+    List uploaded images via HTMX API.
+
+    Returns:
+        HTML fragment with image gallery
+    """
+    try:
+        # Require authentication
+        user = require_authentication(request)
+
+        # Get image service
+        image_service = get_image_service()
+        images = image_service.list_images()
+
+        # Generate image gallery HTML
+        if not images:
+            gallery_html = '<p class="text-muted">No images uploaded yet.</p>'
+        else:
+            gallery_items = []
+            for image in images:
+                # Format file size
+                size_mb = image['size'] / (1024 * 1024)
+                size_str = f"{size_mb:.1f} MB" if size_mb >= 1 else f"{image['size'] / 1024:.1f} KB"
+
+                gallery_items.append(f'''
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-title">{image['filename']}</h6>
+                            <p class="card-text">
+                                <small class="text-muted">
+                                    Size: {size_str}<br>
+                                    URL: <code>{image['url']}</code>
+                                </small>
+                            </p>
+                            <div class="btn-group w-100">
+                                <button type="button" class="btn btn-sm btn-outline-primary"
+                                        onclick="navigator.clipboard.writeText('![{image['filename']}]({image['url']})')">
+                                    Copy Markdown
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        onclick="navigator.clipboard.writeText('{image['url']}')">
+                                    Copy URL
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ''')
+
+            gallery_html = f'''
+            <div class="row">
+                {''.join(gallery_items)}
+            </div>
+            '''
+
+        logger.debug(f"Image gallery requested by user {user['username']}")
+
+        return HTMLResponse(content=gallery_html, status_code=200)
+
+    except Exception as e:
+        logger.error(f"Unexpected error listing images via HTMX: {e}")
+        return HTMLResponse(
+            content=_create_error_fragment("An unexpected error occurred while loading images"),
+            status_code=500
         )

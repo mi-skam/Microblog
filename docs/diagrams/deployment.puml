@@ -1,0 +1,163 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Deployment.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Deployment Architecture Options
+
+' ====== OPTION 1: FULL STACK DEPLOYMENT ======
+deploymentNode("Production Server (Full Stack)", "Ubuntu 22.04 LTS", "VPS/Dedicated Server") {
+    deploymentNode("Reverse Proxy Layer", "nginx 1.18+", "Web Server + SSL Termination") {
+        node("SSL/TLS", "Let's Encrypt") {
+            artifact("SSL Certificate", "Automatic Renewal")
+        }
+        node("Load Balancer", "nginx") {
+            artifact("Static Files", "build/ directory")
+            artifact("Proxy Config", "Dashboard routes")
+        }
+    }
+
+    deploymentNode("Application Runtime", "Python 3.11+", "Virtual Environment") {
+        node("MicroBlog Dashboard", "FastAPI + Uvicorn", "Port 8000") {
+            artifact("Web Interface", "HTMX Frontend")
+            artifact("API Endpoints", "REST + WebSockets")
+            artifact("Auth System", "JWT + Sessions")
+        }
+    }
+
+    deploymentNode("Data Layer", "File System + SQLite", "Local Storage") {
+        node("Content Storage", "content/") {
+            artifact("Markdown Posts", "posts/*.md")
+            artifact("Images", "images/")
+            artifact("Site Config", "_data/config.yaml")
+        }
+        node("User Database", "SQLite") {
+            artifact("User Accounts", "Auth data")
+            artifact("Sessions", "Active sessions")
+        }
+        node("Build Output", "build/") {
+            artifact("Static Site", "Generated HTML/CSS/JS")
+            artifact("Optimized Assets", "Compressed files")
+        }
+    }
+}
+
+' ====== OPTION 2: HYBRID DEPLOYMENT ======
+deploymentNode("Local Development", "Developer Machine", "Content Management") {
+    node("MicroBlog Dashboard (Local)", "FastAPI Dev Server", "localhost:8000") {
+        artifact("Content Editor", "Local management")
+        artifact("Build System", "Static generation")
+    }
+
+    node("Local Storage", "File System") {
+        artifact("Working Content", "content/")
+        artifact("Local Build", "build/")
+    }
+}
+
+deploymentNode("Production CDN", "Global Distribution", "Static Hosting") {
+    node("CDN Provider", "Cloudflare/Netlify/Vercel") {
+        artifact("Static Site", "Deployed build/")
+        artifact("Global Cache", "Edge locations")
+        artifact("Custom Domain", "blog.example.com")
+    }
+}
+
+' ====== OPTION 3: CONTAINER DEPLOYMENT ======
+deploymentNode("Container Platform", "Docker Host/Kubernetes", "Orchestrated Deployment") {
+    deploymentNode("Container Registry", "Docker Hub/ECR", "Image Storage") {
+        artifact("MicroBlog Image", "python:3.11-slim + app")
+    }
+
+    deploymentNode("Reverse Proxy", "nginx/Traefik", "Container") {
+        node("Proxy Container", "nginx:alpine") {
+            artifact("SSL Termination", "Automated certificates")
+            artifact("Load Balancing", "Multi-instance support")
+        }
+    }
+
+    deploymentNode("Application Containers", "Docker/Kubernetes Pods", "Scalable Runtime") {
+        node("MicroBlog Container 1", "microblog:latest", "Port 8000") {
+            artifact("FastAPI App", "Containerized service")
+        }
+        node("MicroBlog Container 2", "microblog:latest", "Port 8000") {
+            artifact("FastAPI App", "Horizontal scaling")
+        }
+        node("MicroBlog Container N", "microblog:latest", "Port 8000") {
+            artifact("FastAPI App", "Auto-scaling")
+        }
+    }
+
+    deploymentNode("Persistent Storage", "Docker Volumes/PVCs", "Shared Data") {
+        node("Content Volume", "Persistent Storage") {
+            artifact("Shared Content", "content/")
+            artifact("Shared Config", "Mounted configs")
+        }
+        node("Build Volume", "Persistent Storage") {
+            artifact("Generated Site", "build/")
+            artifact("Backups", "Atomic builds")
+        }
+        node("Database Volume", "Persistent Storage") {
+            artifact("SQLite DB", "User data")
+        }
+    }
+}
+
+' ====== EXTERNAL SYSTEMS ======
+deploymentNode("Content Authors", "Various Locations", "Content Creation") {
+    node("Developer Workstation", "Local Machine") {
+        artifact("Git Repository", "Version control")
+        artifact("SSH/SFTP Client", "File transfer")
+        artifact("Text Editor", "Markdown editing")
+    }
+}
+
+deploymentNode("Monitoring & CI/CD", "External Services", "Operations") {
+    node("CI/CD Pipeline", "GitHub Actions/GitLab CI") {
+        artifact("Build Automation", "Automated builds")
+        artifact("Deploy Scripts", "Deployment automation")
+        artifact("Tests", "Quality assurance")
+    }
+
+    node("Monitoring", "External Services") {
+        artifact("Uptime Monitoring", "Health checks")
+        artifact("Log Aggregation", "Centralized logging")
+        artifact("Performance Metrics", "Analytics")
+    }
+}
+
+' ====== DATA FLOWS ======
+
+' Full Stack Deployment Flows
+Rel("Content Authors", "Production Server (Full Stack)", "SSH/Git Deploy", "File transfer")
+Rel("Production Server (Full Stack)", "Monitoring & CI/CD", "Metrics/Logs", "Telemetry")
+
+' Hybrid Deployment Flows
+Rel("Content Authors", "Local Development", "Direct Edit", "Local content management")
+Rel("Local Development", "Production CDN", "Build & Deploy", "rsync/git/CI")
+Rel("Production CDN", "Monitoring & CI/CD", "Analytics", "Usage metrics")
+
+' Container Deployment Flows
+Rel("Content Authors", "Container Platform", "Git Webhook", "Automated deployment")
+Rel("CI/CD Pipeline", "Container Platform", "Deploy", "Container updates")
+Rel("Container Platform", "Monitoring & CI/CD", "Health/Metrics", "Observability")
+
+' Internal Data Flows (Full Stack)
+Rel_U("Reverse Proxy Layer", "Application Runtime", "Proxy", "HTTP requests")
+Rel_D("Application Runtime", "Data Layer", "Read/Write", "File I/O + DB queries")
+
+' Internal Data Flows (Container)
+Rel_U("Reverse Proxy", "Application Containers", "Load Balance", "HTTP distribution")
+Rel_D("Application Containers", "Persistent Storage", "Mount", "Shared volumes")
+
+note right of "Production Server (Full Stack)" : **Scaling:** Vertical scaling\n**Pros:** Simple deployment, full control\n**Cons:** Single point of failure\n**Best for:** Small to medium blogs
+
+note right of "Local Development" : **Scaling:** Infinite (CDN)\n**Pros:** Fast global delivery, cost-effective\n**Cons:** No dynamic features in production\n**Best for:** Static content, high traffic
+
+note right of "Container Platform" : **Scaling:** Horizontal auto-scaling\n**Pros:** High availability, easy scaling\n**Cons:** Complex setup, resource overhead\n**Best for:** Enterprise, high availability needs
+
+note bottom : **Security Considerations:**\n- SSL/TLS encryption for all deployments\n- JWT authentication with secure secrets\n- CSRF protection enabled\n- Container security scanning\n- Network isolation in container deployments
+
+note top : **Performance Optimizations:**\n- Static file caching (nginx/CDN)\n- Gzip compression enabled\n- Image optimization pipeline\n- Database connection pooling\n- Atomic build system with rollback
+
+@enduml

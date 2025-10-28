@@ -10,17 +10,17 @@ This is the full specification of the task you must complete.
 
 ```json
 {
-  "task_id": "I5.T1",
+  "task_id": "I5.T2",
   "iteration_id": "I5",
   "iteration_goal": "Implement HTMX-enhanced interactivity, live markdown preview, image management, and build system integration with the dashboard",
-  "description": "Implement HTMX API endpoints for dynamic post operations including create, update, delete, and publish/unpublish with HTML fragment responses and proper error handling.",
-  "agent_type_hint": "BackendAgent",
-  "inputs": "HTMX integration patterns, API endpoint requirements, HTML fragment responses",
-  "target_files": ["microblog/server/routes/api.py"],
-  "input_files": ["microblog/server/routes/dashboard.py", "microblog/content/post_service.py"],
-  "deliverables": "HTMX API endpoints, HTML fragment responses, dynamic post operations, error handling",
-  "acceptance_criteria": "API endpoints return HTML fragments, HTMX requests work correctly, error responses are user-friendly, CSRF protection active",
-  "dependencies": ["I4.T6"],
+  "description": "Create deployment architecture diagram showing different deployment options (full stack, hybrid, container) with infrastructure components and data flow patterns.",
+  "agent_type_hint": "DiagrammingAgent",
+  "inputs": "Deployment options from specification, infrastructure requirements, data flow patterns",
+  "target_files": ["docs/diagrams/deployment.puml"],
+  "input_files": [".codemachine/artifacts/plan/01_Plan_Overview_and_Setup.md"],
+  "deliverables": "PlantUML deployment diagram showing architecture options",
+  "acceptance_criteria": "Diagram shows all deployment options, infrastructure components included, data flows illustrated, scaling considerations visible",
+  "dependencies": ["I4.T2"],
   "parallelizable": true,
   "done": false
 }
@@ -32,170 +32,207 @@ This is the full specification of the task you must complete.
 
 The following are the relevant sections from the architecture and plan documents, which I found by analyzing the task description.
 
-### Context: api-design-communication (from 04_Behavior_and_Communication.md)
+### Context: deployment-view (from 05_Operational_Architecture.md)
 
 ```markdown
-### 3.7. API Design & Communication
+### 3.9. Deployment View
 
-**API Style:** RESTful HTTP API with HTMX Enhancement
+**Target Environment:**
 
-The MicroBlog system employs a RESTful API design enhanced with HTMX for dynamic interactions. This approach provides a traditional web application experience while enabling progressive enhancement through AJAX-style interactions without complex JavaScript frameworks.
+**Primary Deployment Options:**
+1. **Development Environment**: Local workstation with hot-reload capabilities
+2. **Self-Hosted VPS**: Linux server with manual deployment and management
+3. **Hybrid Deployment**: Local dashboard with static output deployed to CDN
+4. **Container Deployment**: Docker-based deployment for consistency
 
-**API Design Principles:**
-- **REST-compliant**: Standard HTTP methods (GET, POST, PUT, DELETE) with semantic URLs
-- **HTML-first**: Primary responses are HTML fragments for HTMX consumption
-- **Progressive Enhancement**: All functionality works with and without JavaScript
-- **Stateless**: JWT-based authentication eliminates server-side session management
-- **CSRF Protection**: All state-changing operations include CSRF token validation
+**Deployment Strategy:**
 
-**API Categories:**
-
-1. **Authentication Endpoints**
-   - `POST /auth/login` - User authentication with credential validation
-   - `POST /auth/logout` - Session termination and cookie clearing
-   - `GET /auth/check` - Session validation for protected routes
-
-2. **Dashboard Page Routes**
-   - `GET /dashboard` - Main dashboard with post listing
-   - `GET /dashboard/posts/new` - New post creation form
-   - `GET /dashboard/posts/{id}/edit` - Post editing interface
-   - `GET /dashboard/settings` - Configuration management interface
-
-3. **HTMX API Endpoints**
-   - `POST /api/posts` - Create new post with live feedback
-   - `PUT /api/posts/{id}` - Update existing post content
-   - `DELETE /api/posts/{id}` - Delete post with confirmation
-   - `POST /api/posts/{id}/publish` - Toggle post publication status
-   - `POST /api/build` - Trigger site rebuild with progress updates
-   - `POST /api/images` - Handle image uploads with validation
-
-**HTMX Integration Patterns:**
-
-1. **Live Form Validation**
-```html
-<input name="title"
-       hx-post="/api/validate/title"
-       hx-trigger="blur"
-       hx-target="#title-feedback">
+**Option 1: Full Stack Deployment (Recommended for Dynamic Management)**
+```
+Internet → nginx/Caddy (443) → FastAPI Dashboard (8000)
+                           ↓
+                    Static Files (build/)
 ```
 
-2. **Dynamic Content Updates**
-```html
-<button hx-delete="/api/posts/123"
-        hx-confirm="Delete this post?"
-        hx-target="#post-123"
-        hx-swap="outerHTML">Delete</button>
+**Option 2: Hybrid Deployment (Recommended for Performance)**
+```
+Local: MicroBlog Dashboard (development/management)
+   ↓ (build + rsync/deploy)
+Remote: Static File Server (production/public)
 ```
 
-3. **Live Markdown Preview**
-```html
-<textarea name="content"
-          hx-post="/api/preview"
-          hx-trigger="keyup changed delay:500ms"
-          hx-target="#preview-pane">
+**Option 3: Container Deployment**
+```dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+EXPOSE 8000
+CMD ["microblog", "serve", "--host", "0.0.0.0"]
 ```
 
-4. **Build Progress Updates**
-```html
-<button hx-post="/api/build"
-        hx-target="#build-status"
-        hx-indicator="#build-spinner">Rebuild Site</button>
-```
+**(Optional) Deployment Diagram (PlantUML):**
+```plantuml
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Deployment.puml
 
-**API Error Handling:**
-
-**Standard HTTP Status Codes:**
-- `200 OK`: Successful operation
-- `201 Created`: Resource created successfully
-- `400 Bad Request`: Invalid input data or validation errors
-- `401 Unauthorized`: Authentication required or failed
-- `403 Forbidden`: CSRF token invalid or insufficient permissions
-- `404 Not Found`: Requested resource does not exist
-- `422 Unprocessable Entity`: Validation errors with detailed field information
-- `500 Internal Server Error`: Unexpected server error
-
-**Error Response Format:**
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Invalid post data provided",
-    "details": {
-      "title": ["Title is required and must be between 1-200 characters"],
-      "content": ["Content cannot be empty"]
+deploymentNode("Production Server", "Ubuntu 22.04 LTS", "VPS") {
+    deploymentNode("Reverse Proxy", "nginx 1.18", "Web Server") {
+        artifact("SSL Certificate", "Let's Encrypt")
+        artifact("Static Files", "build/")
     }
-  }
+
+    deploymentNode("Application Runtime", "Python 3.12", "Virtual Environment") {
+        node("MicroBlog Dashboard", "FastAPI + Uvicorn", "Port 8000") {
+            artifact("Dashboard App", "Python Application")
+            artifact("CLI Tools", "Click Commands")
+        }
+    }
+
+    deploymentNode("Data Storage", "File System", "Local Storage") {
+        node("Content Directory", "content/") {
+            artifact("Markdown Posts", "posts/")
+            artifact("Images", "images/")
+            artifact("Configuration", "_data/config.yaml")
+        }
+        node("Database", "SQLite") {
+            artifact("User Data", "microblog.db")
+        }
+        node("Build Output", "build/") {
+            artifact("Static HTML", "Generated Site")
+        }
+    }
+}
+
+deploymentNode("CDN/Static Hosting", "Optional", "Global Distribution") {
+    node("Cloudflare Pages", "Static Hosting") {
+        artifact("Deployed Site", "Synced from build/")
+    }
+}
+
+node("Content Author", "Local Machine") {
+    artifact("SSH/SFTP", "File Transfer")
+    artifact("Git Repository", "Version Control")
+}
+
+@enduml
+```
+
+**Configuration Management:**
+
+**Environment-Specific Configurations:**
+```yaml
+# Development configuration
+server:
+  host: "127.0.0.1"
+  port: 8000
+  hot_reload: true
+  debug: true
+
+# Production configuration
+server:
+  host: "0.0.0.0"
+  port: 8000
+  hot_reload: false
+  debug: false
+```
+
+**Deployment Scripts:**
+```bash
+#!/bin/bash
+# Production deployment script
+set -e
+
+echo "Deploying MicroBlog..."
+cd /opt/microblog
+
+# Backup current installation
+cp -r build build.backup.$(date +%Y%m%d_%H%M%S)
+
+# Update application code
+git pull origin main
+
+# Install dependencies
+.venv/bin/pip install -r requirements.txt
+
+# Run migrations if needed
+.venv/bin/microblog upgrade-db
+
+# Rebuild site
+.venv/bin/microblog build
+
+# Restart services
+sudo systemctl restart microblog
+sudo systemctl restart nginx
+
+echo "Deployment completed successfully"
+```
+
+**Service Configuration:**
+```ini
+# /etc/systemd/system/microblog.service
+[Unit]
+Description=MicroBlog Dashboard Service
+After=network.target
+
+[Service]
+Type=simple
+User=microblog
+Group=microblog
+WorkingDirectory=/opt/microblog
+Environment=PATH=/opt/microblog/.venv/bin
+ExecStart=/opt/microblog/.venv/bin/microblog serve --config /opt/microblog/config.yaml
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**nginx Configuration:**
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name blog.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/blog.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/blog.example.com/privkey.pem;
+
+    # Dashboard routes
+    location /dashboard {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Static blog content
+    location / {
+        root /opt/microblog/build;
+        try_files $uri $uri/ =404;
+        expires 1h;
+        add_header Cache-Control "public, immutable";
+    }
 }
 ```
-
-**HTMX Error Handling:**
-```html
-<!-- Error responses return HTML fragments for display -->
-<div class="error-message" hx-swap-oob="true" id="error-container">
-  <p>Failed to save post. Please check your inputs and try again.</p>
-</div>
-```
 ```
 
-### Context: task-i5-t1 (from 02_Iteration_I5.md)
+### Context: task-i5-t2 (from 02_Iteration_I5.md)
 
 ```markdown
-    *   **Task 5.1:**
-        *   **Task ID:** `I5.T1`
-        *   **Description:** Implement HTMX API endpoints for dynamic post operations including create, update, delete, and publish/unpublish with HTML fragment responses and proper error handling.
-        *   **Agent Type Hint:** `BackendAgent`
-        *   **Inputs:** HTMX integration patterns, API endpoint requirements, HTML fragment responses
-        *   **Input Files:** ["microblog/server/routes/dashboard.py", "microblog/content/post_service.py"]
-        *   **Target Files:** ["microblog/server/routes/api.py"]
-        *   **Deliverables:** HTMX API endpoints, HTML fragment responses, dynamic post operations, error handling
-        *   **Acceptance Criteria:** API endpoints return HTML fragments, HTMX requests work correctly, error responses are user-friendly, CSRF protection active
-        *   **Dependencies:** `I4.T6`
+    *   **Task 5.2:**
+        *   **Task ID:** `I5.T2`
+        *   **Description:** Create deployment architecture diagram showing different deployment options (full stack, hybrid, container) with infrastructure components and data flow patterns.
+        *   **Agent Type Hint:** `DiagrammingAgent`
+        *   **Inputs:** Deployment options from specification, infrastructure requirements, data flow patterns
+        *   **Input Files:** [".codemachine/artifacts/plan/01_Plan_Overview_and_Setup.md"]
+        *   **Target Files:** ["docs/diagrams/deployment.puml"]
+        *   **Deliverables:** PlantUML deployment diagram showing architecture options
+        *   **Acceptance Criteria:** Diagram shows all deployment options, infrastructure components included, data flows illustrated, scaling considerations visible
+        *   **Dependencies:** `I4.T2`
         *   **Parallelizable:** Yes
-```
-
-### Context: htmx-integration (from 04_Behavior_and_Communication.md)
-
-```markdown
-**Communication Patterns:**
-
-1. **Synchronous Request/Response**: Standard HTTP interactions for page loads and API calls
-2. **HTMX Partial Updates**: Dynamic content updates without full page refreshes
-3. **Server-Sent Events**: Real-time build progress updates (future enhancement)
-4. **File System Events**: Configuration hot-reload through file watchers (development mode)
-
-**Detailed API Endpoints:**
-
-**Dashboard API Endpoints:**
-```
-GET /dashboard
-Headers: Cookie: jwt=...
-Response: 200 OK + HTML dashboard page
-
-POST /api/posts
-Headers: Cookie: jwt=...; X-CSRF-Token: ...
-Content-Type: application/json
-Body: {
-  "title": "My New Post",
-  "content": "# Hello World\nThis is my post content",
-  "tags": ["tech", "blogging"],
-  "draft": true
-}
-Response: 201 Created + HTML fragment with post data
-
-PUT /api/posts/123
-Headers: Cookie: jwt=...; X-CSRF-Token: ...
-Content-Type: application/json
-Body: { "title": "Updated Title", "content": "...", "draft": false }
-Response: 200 OK + HTML fragment with updated post
-
-DELETE /api/posts/123
-Headers: Cookie: jwt=...; X-CSRF-Token: ...
-Response: 200 OK + HTML fragment removing post from list
-
-POST /api/build
-Headers: Cookie: jwt=...; X-CSRF-Token: ...
-Response: 202 Accepted + HTML fragment with build progress
-```
 ```
 
 ---
@@ -205,33 +242,23 @@ Response: 202 Accepted + HTML fragment with build progress
 The following analysis is based on my direct review of the current codebase. Use these notes and tips to guide your implementation.
 
 ### Relevant Existing Code
-
-*   **File:** `microblog/server/routes/dashboard.py`
-    *   **Summary:** This file contains existing dashboard routes for serving HTML pages and currently has preliminary API endpoints (`/dashboard/api/posts` and `/dashboard/api/posts/{slug}`) that handle form-based POST requests and return redirects. These routes provide the foundation for understanding how post operations work but need to be adapted for HTMX HTML fragment responses.
-    *   **Recommendation:** You MUST study the existing API endpoints in lines 254-376 to understand the post creation and update logic. You SHOULD extract the core business logic patterns and adapt them for the new `/api/posts` endpoints that return HTML fragments instead of redirects.
-
-*   **File:** `microblog/content/post_service.py`
-    *   **Summary:** This file contains the complete PostService class with all CRUD operations for posts including create, update, delete, publish/unpublish operations. It handles markdown file processing, YAML frontmatter, validation, and error handling.
-    *   **Recommendation:** You MUST import and use the `get_post_service()` function from this file. The service provides methods like `create_post()`, `update_post()`, `delete_post()`, `publish_post()`, and `unpublish_post()` that you SHOULD use directly in your API endpoints.
-
-*   **File:** `microblog/server/middleware.py`
-    *   **Summary:** This file contains authentication and CSRF protection middleware with helper functions for getting current user and validating CSRF tokens. It provides `get_current_user()`, `require_authentication()`, `get_csrf_token()`, and `validate_csrf_from_form()` functions.
-    *   **Recommendation:** You MUST use `require_authentication(request)` to ensure authenticated access and `validate_csrf_from_form(request, form_data)` for CSRF validation in state-changing operations. The CSRF protection middleware expects tokens in headers as 'X-CSRF-Token'.
-
-*   **File:** `templates/dashboard/posts_list.html`
-    *   **Summary:** This template already contains JavaScript code that expects HTMX endpoints like `/api/posts/{slug}/publish`, `/api/posts/{slug}/unpublish`, and `DELETE /api/posts/{slug}`. The template shows how HTML fragments should be structured for post operations.
-    *   **Recommendation:** You MUST ensure your API endpoints return HTML fragments that are compatible with the existing HTMX code in lines 452-492. The template expects these endpoints to work with HTMX and reload the page after operations.
+*   **File:** `docs/diagrams/component_diagram.puml`
+    *   **Summary:** This file contains an existing C4 component diagram that demonstrates the PlantUML format and C4 modeling standards used in the project.
+    *   **Recommendation:** You MUST follow the same PlantUML format and C4 modeling conventions as shown in this file. Use the C4_Deployment.puml include for deployment diagrams.
+*   **File:** `Dockerfile`
+    *   **Summary:** This file contains the container deployment configuration showing the Python 3.11 base image, application setup, and port exposure (8000).
+    *   **Recommendation:** You SHOULD reference this container configuration in your deployment diagram to show the containerized deployment option accurately.
+*   **File:** `docker-compose.yml`
+    *   **Summary:** This file shows the development container setup with volume mounts for content, build output, templates, and static files, plus optional nginx reverse proxy configuration.
+    *   **Recommendation:** You SHOULD include the volume mounting strategy and nginx reverse proxy option in your deployment diagram.
+*   **File:** `microblog/server/config.py`
+    *   **Summary:** This file contains comprehensive configuration management with support for different deployment environments (development vs production settings).
+    *   **Recommendation:** You SHOULD illustrate how configuration differs between deployment environments in your diagram.
 
 ### Implementation Tips & Notes
-
-*   **Tip:** The existing dashboard API endpoints in `dashboard.py` (lines 254-376) show the exact form field structure and validation logic needed. You SHOULD reuse this logic but modify the response format from redirects to HTML fragments.
-
-*   **Note:** The posts_list.html template already contains HTMX JavaScript calls (lines 452-492) that expect specific API endpoints to exist. You MUST implement exactly these endpoints: `DELETE /api/posts/{slug}`, `POST /api/posts/{slug}/publish`, and `POST /api/posts/{slug}/unpublish`.
-
-*   **Warning:** The middleware expects CSRF tokens in the 'X-CSRF-Token' header for API calls. The existing templates set this header using `document.querySelector('meta[name="csrf-token"]').getAttribute('content')`. You MUST ensure your endpoints validate this properly.
-
-*   **Tip:** The target file `microblog/server/routes/api.py` does not exist yet. You need to create it and ensure it's imported and registered in the FastAPI application. Look at how `dashboard.py` and `auth.py` are structured for the pattern to follow.
-
-*   **Note:** The post service uses specific exception types (`PostNotFoundError`, `PostValidationError`, `PostFileError`) that you SHOULD catch and convert to appropriate HTTP status codes and HTML error fragments for HTMX consumption.
-
-*   **Warning:** The existing form handling in dashboard.py processes forms with specific field names like `title`, `content`, `new_slug`, `tags`, `post_date`, `draft`. Your API endpoints MUST handle the same field structure to maintain consistency.
+*   **Tip:** I confirmed that the project follows C4 modeling standards with PlantUML. The existing component diagram uses `!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml` - you SHOULD use the corresponding C4_Deployment.puml include for consistency.
+*   **Note:** The architecture documentation already contains a sample deployment diagram in PlantUML format. You SHOULD use this as a starting point but expand it to show ALL three deployment options (full stack, hybrid, container) as separate deployment scenarios.
+*   **Warning:** The acceptance criteria specifically requires showing "data flow patterns" and "scaling considerations". Make sure your diagram illustrates not just static architecture but also how data flows between components and how each deployment option scales.
+*   **Tip:** The existing diagrams directory contains auth_flow.puml, build_process.puml, component_diagram.puml, and database_erd.puml. Your deployment.puml should maintain the same naming convention and quality standards.
+*   **Note:** The server configuration in `microblog/server/app.py` shows the application listens on port 8000 by default, with CORS and security middleware. This should be reflected in your deployment diagram.
+*   **Tip:** The nginx configuration sample in the architecture documentation shows both dashboard proxying (to port 8000) and static file serving (from build directory). This hybrid approach should be prominently featured in your deployment options.

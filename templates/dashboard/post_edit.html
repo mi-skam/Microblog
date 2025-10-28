@@ -86,7 +86,10 @@
                       name="content"
                       rows="20"
                       required
-                      placeholder="Write your post content in Markdown...">{% if is_edit %}{{ post.content }}{% endif %}</textarea>
+                      placeholder="Write your post content in Markdown..."
+                      hx-post="/api/preview"
+                      hx-trigger="keyup changed delay:500ms"
+                      hx-target="#markdown-preview">{% if is_edit %}{{ post.content }}{% endif %}</textarea>
             <small>Supports Markdown formatting</small>
         </div>
 
@@ -99,10 +102,12 @@
         </div>
     </form>
 
-    <!-- Preview Panel (Optional Future Enhancement) -->
-    <div class="preview-panel" style="display: none;">
+    <!-- Preview Panel -->
+    <div class="preview-panel">
         <h3>Preview</h3>
-        <div id="markdown-preview"></div>
+        <div id="markdown-preview">
+            <p><em>Start typing to see a preview...</em></p>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -111,8 +116,19 @@
 <style>
 /* Post Editor Layout */
 .post-editor {
-    max-width: 800px;
+    max-width: 1200px;
     margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    align-items: start;
+}
+
+@media (max-width: 1024px) {
+    .post-editor {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
 }
 
 .post-form {
@@ -238,13 +254,16 @@
     color: var(--pico-color-red-600);
 }
 
-/* Preview Panel (hidden by default) */
+/* Preview Panel */
 .preview-panel {
     background: var(--pico-card-background-color);
     border: var(--pico-border-width) solid var(--pico-border-color);
     border-radius: var(--pico-border-radius);
     padding: 1.5rem;
-    margin-top: 2rem;
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
 }
 
 .preview-panel h3 {
@@ -252,17 +271,151 @@
     margin-bottom: 1rem;
     border-bottom: 1px solid var(--pico-border-color);
     padding-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.preview-panel h3::before {
+    content: "👁";
+    font-size: 1.2em;
 }
 
 #markdown-preview {
     min-height: 200px;
     line-height: 1.6;
+    font-family: var(--pico-font-family);
+}
+
+/* Preview content styling */
+#markdown-preview h1,
+#markdown-preview h2,
+#markdown-preview h3,
+#markdown-preview h4,
+#markdown-preview h5,
+#markdown-preview h6 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    line-height: 1.3;
+}
+
+#markdown-preview h1:first-child,
+#markdown-preview h2:first-child,
+#markdown-preview h3:first-child,
+#markdown-preview h4:first-child,
+#markdown-preview h5:first-child,
+#markdown-preview h6:first-child {
+    margin-top: 0;
+}
+
+#markdown-preview p {
+    margin-bottom: 1rem;
+}
+
+#markdown-preview pre {
+    background: var(--pico-code-background-color);
+    border: 1px solid var(--pico-border-color);
+    border-radius: var(--pico-border-radius);
+    padding: 1rem;
+    overflow-x: auto;
+    margin-bottom: 1rem;
+}
+
+#markdown-preview code {
+    background: var(--pico-code-background-color);
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.875em;
+}
+
+#markdown-preview pre code {
+    background: transparent;
+    padding: 0;
+}
+
+#markdown-preview blockquote {
+    border-left: 4px solid var(--pico-primary-500);
+    padding-left: 1rem;
+    margin: 1rem 0;
+    color: var(--pico-muted-color);
+    font-style: italic;
+}
+
+#markdown-preview table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+}
+
+#markdown-preview th,
+#markdown-preview td {
+    padding: 0.5rem;
+    border: 1px solid var(--pico-border-color);
+    text-align: left;
+}
+
+#markdown-preview th {
+    background: var(--pico-muted-background-color);
+    font-weight: 600;
+}
+
+#markdown-preview ul,
+#markdown-preview ol {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+}
+
+#markdown-preview li {
+    margin-bottom: 0.25rem;
+}
+
+/* Error preview styling */
+.error-preview {
+    background: var(--pico-color-red-50);
+    border: 1px solid var(--pico-color-red-200);
+    border-radius: var(--pico-border-radius);
+    padding: 1rem;
+    color: var(--pico-color-red-700);
+}
+
+/* Loading indicator */
+#markdown-preview.htmx-request {
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+#markdown-preview.htmx-request::after {
+    content: "Updating preview...";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--pico-card-background-color);
+    padding: 0.5rem 1rem;
+    border-radius: var(--pico-border-radius);
+    border: 1px solid var(--pico-border-color);
+    font-size: 0.875rem;
+    color: var(--pico-muted-color);
 }
 </style>
 {% endblock %}
 
 {% block extra_scripts %}
+<!-- Dashboard Enhancements -->
+<script src="/static/js/dashboard.js"></script>
+
 <script>
+// Trigger initial preview for existing content when editing
+{% if is_edit and post.content %}
+document.addEventListener('DOMContentLoaded', function() {
+    const contentTextarea = document.getElementById('content');
+    if (contentTextarea.value.trim()) {
+        // Trigger HTMX request for initial preview
+        htmx.trigger(contentTextarea, 'keyup');
+    }
+});
+{% endif %}
+
 // Auto-generate slug from title
 document.getElementById('title').addEventListener('input', function(e) {
     const slugInput = document.getElementById('slug');

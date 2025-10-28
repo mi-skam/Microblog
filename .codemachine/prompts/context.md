@@ -10,17 +10,17 @@ This is the full specification of the task you must complete.
 
 ```json
 {
-  "task_id": "I5.T1",
+  "task_id": "I5.T3",
   "iteration_id": "I5",
   "iteration_goal": "Implement HTMX-enhanced interactivity, live markdown preview, image management, and build system integration with the dashboard",
-  "description": "Implement HTMX API endpoints for dynamic post operations including create, update, delete, and publish/unpublish with HTML fragment responses and proper error handling.",
+  "description": "Implement live markdown preview functionality with HTMX, debounced input handling, and real-time HTML rendering. Create preview pane in post editing interface.",
   "agent_type_hint": "BackendAgent",
-  "inputs": "HTMX integration patterns, API endpoint requirements, HTML fragment responses",
-  "target_files": ["microblog/server/routes/api.py"],
-  "input_files": ["microblog/server/routes/dashboard.py", "microblog/content/post_service.py"],
-  "deliverables": "HTMX API endpoints, HTML fragment responses, dynamic post operations, error handling",
-  "acceptance_criteria": "API endpoints return HTML fragments, HTMX requests work correctly, error responses are user-friendly, CSRF protection active",
-  "dependencies": ["I4.T6"],
+  "inputs": "Live preview requirements, HTMX patterns, debouncing strategy, markdown rendering",
+  "target_files": ["microblog/server/routes/api.py", "templates/dashboard/post_edit.html", "static/js/dashboard.js"],
+  "input_files": ["microblog/server/routes/api.py", "microblog/builder/markdown_processor.py", "templates/dashboard/post_edit.html"],
+  "deliverables": "Live markdown preview, HTMX integration, debounced input handling, preview interface",
+  "acceptance_criteria": "Preview updates in real-time with 500ms delay, markdown renders correctly, preview pane responsive, no performance issues",
+  "dependencies": ["I5.T1", "I3.T2"],
   "parallelizable": true,
   "done": false
 }
@@ -32,42 +32,21 @@ This is the full specification of the task you must complete.
 
 The following are the relevant sections from the architecture and plan documents, which I found by analyzing the task description.
 
-### Context: api-design-communication (from 04_Behavior_and_Communication.md)
+### Context: key-interaction-flow (from 04_Behavior_and_Communication.md)
 
 ```markdown
-### 3.7. API Design & Communication
+**Key Interaction Flow (Sequence Diagram):**
 
-**API Style:** RESTful HTTP API with HTMX Enhancement
+**Description:** This diagram illustrates the complete workflow for user authentication and post creation, showing the interaction between the web browser, dashboard application, authentication system, and content storage.
 
-The MicroBlog system employs a RESTful API design enhanced with HTMX for dynamic interactions. This approach provides a traditional web application experience while enabling progressive enhancement through AJAX-style interactions without complex JavaScript frameworks.
-
-**API Design Principles:**
-- **REST-compliant**: Standard HTTP methods (GET, POST, PUT, DELETE) with semantic URLs
-- **HTML-first**: Primary responses are HTML fragments for HTMX consumption
-- **Progressive Enhancement**: All functionality works with and without JavaScript
-- **Stateless**: JWT-based authentication eliminates server-side session management
-- **CSRF Protection**: All state-changing operations include CSRF token validation
-
-**API Categories:**
-
-1. **Authentication Endpoints**
-   - `POST /auth/login` - User authentication with credential validation
-   - `POST /auth/logout` - Session termination and cookie clearing
-   - `GET /auth/check` - Session validation for protected routes
-
-2. **Dashboard Page Routes**
-   - `GET /dashboard` - Main dashboard with post listing
-   - `GET /dashboard/posts/new` - New post creation form
-   - `GET /dashboard/posts/{id}/edit` - Post editing interface
-   - `GET /dashboard/settings` - Configuration management interface
-
-3. **HTMX API Endpoints**
-   - `POST /api/posts` - Create new post with live feedback
-   - `PUT /api/posts/{id}` - Update existing post content
-   - `DELETE /api/posts/{id}` - Delete post with confirmation
-   - `POST /api/posts/{id}/publish` - Toggle post publication status
-   - `POST /api/build` - Trigger site rebuild with progress updates
-   - `POST /api/images` - Handle image uploads with validation
+== Live Preview Flow ==
+author -> browser : Type in markdown editor
+note right : 500ms debounce
+browser -> dashboard : POST /api/preview (HTMX)
+dashboard -> posts : Render markdown
+posts -> dashboard : HTML preview
+dashboard -> browser : HTML fragment
+browser -> author : Live preview updated
 ```
 
 ### Context: htmx-integration (from 04_Behavior_and_Communication.md)
@@ -150,48 +129,34 @@ The MicroBlog system employs a RESTful API design enhanced with HTMX for dynamic
 ```markdown
 **Detailed API Endpoints:**
 
-**Dashboard API Endpoints:**
+**Image Upload Endpoint:**
 ```
-POST /api/posts
+POST /api/images
 Headers: Cookie: jwt=...; X-CSRF-Token: ...
-Content-Type: application/json
-Body: {
-  "title": "My New Post",
-  "content": "# Hello World\nThis is my post content",
-  "tags": ["tech", "blogging"],
-  "draft": true
+Content-Type: multipart/form-data
+Body: file=@image.jpg
+Response: 201 Created + JSON with image URL and markdown snippet
+{
+  "filename": "2025-10-26-image.jpg",
+  "url": "../images/2025-10-26-image.jpg",
+  "markdown": "![Image description](../images/2025-10-26-image.jpg)"
 }
-Response: 201 Created + HTML fragment with post data
-
-PUT /api/posts/123
-Headers: Cookie: jwt=...; X-CSRF-Token: ...
-Content-Type: application/json
-Body: { "title": "Updated Title", "content": "...", "draft": false }
-Response: 200 OK + HTML fragment with updated post
-
-DELETE /api/posts/123
-Headers: Cookie: jwt=...; X-CSRF-Token: ...
-Response: 200 OK + HTML fragment removing post from list
-
-POST /api/build
-Headers: Cookie: jwt=...; X-CSRF-Token: ...
-Response: 202 Accepted + HTML fragment with build progress
 ```
 ```
 
-### Context: task-i5-t1 (from 02_Iteration_I5.md)
+### Context: task-i5-t3 (from 02_Iteration_I5.md)
 
 ```markdown
-    *   **Task 5.1:**
-        *   **Task ID:** `I5.T1`
-        *   **Description:** Implement HTMX API endpoints for dynamic post operations including create, update, delete, and publish/unpublish with HTML fragment responses and proper error handling.
+    *   **Task 5.3:**
+        *   **Task ID:** `I5.T3`
+        *   **Description:** Implement live markdown preview functionality with HTMX, debounced input handling, and real-time HTML rendering. Create preview pane in post editing interface.
         *   **Agent Type Hint:** `BackendAgent`
-        *   **Inputs:** HTMX integration patterns, API endpoint requirements, HTML fragment responses
-        *   **Input Files:** ["microblog/server/routes/dashboard.py", "microblog/content/post_service.py"]
-        *   **Target Files:** ["microblog/server/routes/api.py"]
-        *   **Deliverables:** HTMX API endpoints, HTML fragment responses, dynamic post operations, error handling
-        *   **Acceptance Criteria:** API endpoints return HTML fragments, HTMX requests work correctly, error responses are user-friendly, CSRF protection active
-        *   **Dependencies:** `I4.T6`
+        *   **Inputs:** Live preview requirements, HTMX patterns, debouncing strategy, markdown rendering
+        *   **Input Files:** ["microblog/server/routes/api.py", "microblog/builder/markdown_processor.py", "templates/dashboard/post_edit.html"]
+        *   **Target Files:** ["microblog/server/routes/api.py", "templates/dashboard/post_edit.html", "static/js/dashboard.js"]
+        *   **Deliverables:** Live markdown preview, HTMX integration, debounced input handling, preview interface
+        *   **Acceptance Criteria:** Preview updates in real-time with 500ms delay, markdown renders correctly, preview pane responsive, no performance issues
+        *   **Dependencies:** `I5.T1`, `I3.T2`
         *   **Parallelizable:** Yes
 ```
 
@@ -204,45 +169,35 @@ The following analysis is based on my direct review of the current codebase. Use
 ### Relevant Existing Code
 
 *   **File:** `microblog/server/routes/api.py`
-    *   **Summary:** This file already contains a complete HTMX API implementation with all required endpoints (POST /api/posts, PUT /api/posts/{slug}, DELETE /api/posts/{slug}, POST /api/posts/{slug}/publish, POST /api/posts/{slug}/unpublish).
-    *   **Recommendation:** The task appears to be already completed! The file contains all required HTMX endpoints with HTML fragment responses, proper error handling, and CSRF protection.
+    *   **Summary:** This file contains HTMX API endpoints for dynamic post operations (create, update, delete, publish/unpublish). It follows a clear pattern of returning HTML fragments and includes proper error handling with helper functions `_create_error_fragment()` and `_create_success_fragment()`.
+    *   **Recommendation:** You MUST add a new endpoint `/api/preview` to this file following the exact same pattern. The existing endpoints use Form data, proper authentication via `require_authentication()`, and CSRF protection. Import the markdown processor from `microblog.builder.markdown_processor` and use its `process_markdown_text()` method.
 
-*   **File:** `microblog/server/routes/dashboard.py`
-    *   **Summary:** Contains traditional dashboard routes with server-side rendering and basic API endpoints that redirect. Uses proper authentication and CSRF protection through middleware.
-    *   **Recommendation:** You can reference this file for consistent form parsing patterns and error handling approaches, but the HTMX-specific implementation should be in api.py.
+*   **File:** `microblog/builder/markdown_processor.py`
+    *   **Summary:** This file provides a comprehensive markdown processing engine with frontmatter support, syntax highlighting, and content validation. It has a global singleton pattern with `get_markdown_processor()` function and includes methods like `process_markdown_text()` for converting raw markdown to HTML.
+    *   **Recommendation:** You MUST import and use the `get_markdown_processor()` function and call its `process_markdown_text()` method for the preview functionality. This ensures consistency with the build system and maintains the same markdown rendering extensions.
 
-*   **File:** `microblog/content/post_service.py`
-    *   **Summary:** Provides comprehensive post CRUD operations including create_post(), update_post(), delete_post(), publish_post(), and unpublish_post() methods with proper validation and error handling.
-    *   **Recommendation:** The API endpoints already correctly use these service methods. All required post operations are available and properly integrated.
+*   **File:** `templates/dashboard/post_edit.html`
+    *   **Summary:** This file contains a comprehensive post editing form with proper styling, JavaScript for slug generation, and a hidden preview panel (line 103-106) that's already scaffolded but not functional. It extends the dashboard layout and includes HTMX via the layout template.
+    *   **Recommendation:** You MUST modify this file to make the preview panel functional. Add HTMX attributes to the content textarea (id="content" on line 85) with proper debouncing. The preview panel div already exists with id="markdown-preview" - you just need to make it visible and wire it up.
 
-*   **File:** `microblog/server/middleware.py`
-    *   **Summary:** Implements JWT authentication middleware and CSRF protection. Provides helper functions like require_authentication() and get_csrf_token() for route handlers.
-    *   **Recommendation:** The API routes already use require_authentication() correctly. CSRF validation is handled automatically by middleware for /api/ paths.
-
-*   **File:** `microblog/server/app.py`
-    *   **Summary:** FastAPI application factory with proper middleware configuration including authentication, CSRF protection, and security headers. Routes are registered correctly.
-    *   **Recommendation:** The API router is already registered properly in the application. No changes needed here.
+*   **File:** `templates/dashboard/layout.html`
+    *   **Summary:** This file includes HTMX library (line 19) and configures CSRF token handling for all HTMX requests (lines 148-155). It provides the base structure for all dashboard pages.
+    *   **Recommendation:** The HTMX setup is already complete. You can rely on the existing CSRF token configuration and don't need to modify this file.
 
 ### Implementation Tips & Notes
 
-*   **Critical Finding:** The task appears to be already implemented! The `microblog/server/routes/api.py` file contains:
-    - All required HTMX API endpoints (POST, PUT, DELETE, publish/unpublish)
-    - HTML fragment responses using _create_error_fragment() and _create_success_fragment() helper functions
-    - Proper error handling with appropriate HTTP status codes (201, 422, 404, 500)
-    - Authentication via require_authentication() middleware helper
-    - CSRF protection automatically handled by middleware for /api/ routes
-    - Integration with post_service for all CRUD operations
+*   **Tip:** The architecture documentation shows the exact HTMX pattern for live preview: `hx-trigger="keyup changed delay:500ms"` which provides the required 500ms debouncing.
 
-*   **Tip:** The existing implementation follows the architectural patterns exactly as specified:
-    - Uses `hx-swap-oob="true"` for out-of-band updates
-    - Returns appropriate HTTP status codes (201 for creation, 200 for updates, etc.)
-    - Includes JavaScript redirects for post-operation navigation
-    - Handles all PostService exceptions properly (PostValidationError, PostNotFoundError, PostFileError)
+*   **Tip:** I found that the preview panel HTML structure already exists in `post_edit.html` but is hidden with `style="display: none;"`. You just need to show it and wire up the HTMX functionality.
 
-*   **Warning:** Before proceeding with any changes, verify that the current implementation meets the acceptance criteria:
-    - ✅ API endpoints return HTML fragments
-    - ✅ HTMX requests work correctly (implementation looks correct)
-    - ✅ Error responses are user-friendly (uses alert styling)
-    - ✅ CSRF protection active (middleware handles this automatically)
+*   **Note:** The existing API endpoints in `api.py` all follow the same pattern: authentication check, form data parsing, service calls, and HTML fragment responses. Your preview endpoint should follow this same pattern.
 
-*   **Recommendation:** Review the current implementation against the acceptance criteria. If it meets all requirements, the task should be marked as completed rather than reimplemented. The code quality is high and follows all specified patterns.
+*   **Warning:** The task mentions creating `static/js/dashboard.js` but I found that the `static/js/` directory is empty. You should create this file for any custom JavaScript that enhances the HTMX functionality, but the core preview functionality should work entirely through HTMX attributes.
+
+*   **Tip:** The markdown processor has comprehensive error handling with `MarkdownProcessingError`. Make sure to catch these exceptions in your preview endpoint and return appropriate error fragments.
+
+*   **Note:** The existing form submission in `post_edit.html` uses custom JavaScript (lines 282-325). You should ensure your preview functionality doesn't interfere with this existing behavior.
+
+*   **Recommendation:** Follow the exact same HTML fragment response pattern as other API endpoints. Return raw HTML that can be inserted into the preview pane, not JSON responses.
+
+*   **Security Note:** The preview endpoint should use the same authentication and CSRF protection patterns as existing endpoints. The `require_authentication()` middleware and CSRF token handling are already established patterns.

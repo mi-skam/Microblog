@@ -11,6 +11,10 @@ from datetime import datetime
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse
 
+from microblog.builder.markdown_processor import (
+    MarkdownProcessingError,
+    get_markdown_processor,
+)
 from microblog.content.post_service import (
     PostFileError,
     PostNotFoundError,
@@ -395,4 +399,52 @@ async def unpublish_post_htmx(request: Request, slug: str):
         return HTMLResponse(
             content=_create_error_fragment("An unexpected error occurred while unpublishing the post"),
             status_code=500
+        )
+
+
+@router.post("/preview", response_class=HTMLResponse)
+async def preview_markdown_htmx(
+    request: Request,
+    content: str = Form(...)
+):
+    """
+    Preview markdown content as HTML via HTMX API.
+
+    Args:
+        content: Raw markdown content to preview
+
+    Returns:
+        HTML fragment with rendered markdown
+    """
+    try:
+        # Require authentication
+        user = require_authentication(request)
+
+        # CSRF validation is handled by middleware for /api/ paths
+
+        # Get markdown processor
+        markdown_processor = get_markdown_processor()
+
+        # Process the markdown content
+        if not content.strip():
+            # Return empty preview for empty content
+            return HTMLResponse(content="<p><em>Start typing to see a preview...</em></p>", status_code=200)
+
+        html_content = markdown_processor.process_markdown_text(content)
+
+        logger.debug(f"Markdown preview generated for user {user['username']}")
+
+        return HTMLResponse(content=html_content, status_code=200)
+
+    except MarkdownProcessingError as e:
+        logger.error(f"Markdown processing error in preview: {e}")
+        return HTMLResponse(
+            content=f"<div class='error-preview'><p><strong>Preview Error:</strong> {str(e)}</p></div>",
+            status_code=200  # Return 200 to allow HTMX to display the error
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error in markdown preview: {e}")
+        return HTMLResponse(
+            content="<div class='error-preview'><p><strong>Preview Error:</strong> Unable to generate preview</p></div>",
+            status_code=200  # Return 200 to allow HTMX to display the error
         )

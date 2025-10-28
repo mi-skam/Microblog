@@ -32,6 +32,167 @@ This is the full specification of the task you must complete.
 
 The following are the relevant sections from the architecture and plan documents, which I found by analyzing the task description.
 
+### Context: verification-and-integration-strategy (from 03_Verification_and_Glossary.md)
+
+```markdown
+## 5. Verification and Integration Strategy
+
+*   **Testing Levels:**
+    *   **Unit Testing**: Individual component testing with pytest, focusing on business logic, authentication, content processing, and build system components. Target coverage >85% for all modules with comprehensive edge case testing.
+    *   **Integration Testing**: API endpoint testing, database interactions, file system operations, and service integration testing. Verify authentication flows, content management workflows, and build system integration.
+    *   **End-to-End Testing**: Complete user workflow testing including authentication, post creation, editing, publishing, and build processes. Test HTMX interactions, form submissions, and dashboard functionality.
+    *   **Performance Testing**: Build time validation (<5s for 100 posts, <30s for 1000 posts), API response time verification (<200ms), and load testing for concurrent dashboard users.
+    *   **Security Testing**: Authentication security, CSRF protection, input validation, file upload security, and SQL injection prevention testing.
+
+*   **CI/CD:**
+    *   **Automated Testing**: All tests run on every commit with GitHub Actions or similar CI system
+    *   **Code Quality Gates**: Ruff linting, type checking with mypy, security scanning with bandit
+    *   **Build Validation**: Automated build testing with sample content, template rendering verification
+    *   **Artifact Validation**: OpenAPI specification validation, PlantUML diagram syntax checking, configuration schema validation
+    *   **Deployment Testing**: Docker image building, deployment script validation, service configuration testing
+
+*   **Code Quality Gates:**
+    *   **Linting Success**: All code must pass Ruff linting with zero errors and warnings
+    *   **Type Coverage**: Minimum 90% type hint coverage with mypy validation
+    *   **Test Coverage**: Minimum 85% code coverage across all modules
+    *   **Security Scan**: Zero high-severity security vulnerabilities detected by bandit
+    *   **Performance Benchmarks**: All performance targets met in automated testing
+    *   **Documentation Coverage**: All public APIs and configuration options documented
+```
+
+### Context: task-i4-t8 (from 02_Iteration_I4.md)
+
+```markdown
+    <!-- anchor: task-i4-t8 -->
+    *   **Task 4.8:**
+        *   **Task ID:** `I4.T8`
+        *   **Description:** Create integration tests for dashboard functionality including authentication flows, post management operations, and form submissions. Test complete user workflows.
+        *   **Agent Type Hint:** `TestingAgent`
+        *   **Inputs:** Dashboard implementation, user workflow requirements, integration testing patterns
+        *   **Input Files:** ["microblog/server/app.py", "microblog/server/routes/dashboard.py", "tests/conftest.py"]
+        *   **Target Files:** ["tests/integration/test_dashboard.py", "tests/integration/test_auth_flows.py"]
+        *   **Deliverables:** Integration test suite for dashboard functionality and user workflows
+        *   **Acceptance Criteria:** All dashboard routes tested, authentication flows verified, form submissions tested, user workflows covered, test coverage >80%
+        *   **Dependencies:** `I4.T6`, `I4.T7`
+        *   **Parallelizable:** Yes
+```
+
+### Context: directory-structure (from 01_Plan_Overview_and_Setup.md)
+
+```markdown
+## 3. Directory Structure
+
+*   **Root Directory:** `microblog/`
+*   **Structure Definition:** Organized for clear separation of concerns with dedicated locations for source code, templates, content, and generated artifacts.
+
+~~~
+microblog/
+├── microblog/                      # Main Python package
+│   ├── __init__.py
+│   ├── builder/                    # Static site generation
+│   │   ├── __init__.py
+│   │   ├── generator.py            # Main build orchestration
+│   │   ├── markdown_processor.py   # Markdown parsing and frontmatter
+│   │   ├── template_renderer.py    # Jinja2 template rendering
+│   │   └── asset_manager.py        # Image and static file copying
+│   ├── server/                     # Web application and dashboard
+│   │   ├── __init__.py
+│   │   ├── app.py                  # FastAPI application setup
+│   │   ├── routes/
+│   │   │   ├── __init__.py
+│   │   │   ├── auth.py             # Authentication endpoints
+│   │   │   ├── dashboard.py        # Dashboard page routes
+│   │   │   └── api.py              # HTMX API endpoints
+│   │   ├── middleware.py           # Auth and CSRF middleware
+│   │   ├── models.py               # Pydantic request/response models
+│   │   └── config.py               # Configuration management
+│   ├── auth/                       # Authentication and user management
+│   │   ├── __init__.py
+│   │   ├── models.py               # User SQLite model
+│   │   ├── jwt_handler.py          # JWT token management
+│   │   └── password.py             # Password hashing utilities
+│   ├── content/                    # Content management services
+│   │   ├── __init__.py
+│   │   ├── post_service.py         # Post CRUD operations
+│   │   ├── image_service.py        # Image upload and management
+│   │   └── validators.py           # Content validation logic
+│   ├── cli.py                      # Click-based CLI interface
+│   └── utils.py                    # Shared utilities and helpers
+├── tests/                          # Test suite
+│   ├── unit/                       # Unit tests for individual components
+│   ├── integration/                # Integration tests for API endpoints
+│   └── e2e/                        # End-to-end tests for workflows
+~~~
+```
+
+---
+
+## 3. Codebase Analysis & Strategic Guidance
+
+The following analysis is based on my direct review of the current codebase. Use these notes and tips to guide your implementation.
+
+### Relevant Existing Code
+*   **File:** `tests/conftest.py`
+    *   **Summary:** This file provides shared test fixtures including temporary config files, valid/invalid configuration data, content directories, and mock callback utilities.
+    *   **Recommendation:** You MUST use the existing fixtures in conftest.py, especially `valid_config_data`, `temp_config_file`, and `temp_content_dir` for consistent test setup.
+
+*   **File:** `tests/integration/test_dashboard.py`
+    *   **Summary:** This file already contains comprehensive integration tests for dashboard functionality with over 700 lines of tests covering routes, authentication mocking, template rendering, and error scenarios.
+    *   **Recommendation:** The dashboard integration tests are ALREADY COMPLETE. Review this file to understand the existing test patterns and ensure your updates complement rather than duplicate existing tests.
+
+*   **File:** `tests/integration/test_auth_flows.py`
+    *   **Summary:** This file contains authentication flow integration tests covering login page display, authentication redirects, session validation, and CSRF protection.
+    *   **Recommendation:** The auth flows tests are ALREADY COMPREHENSIVE. You should focus on enhancing coverage or adding any missing edge cases rather than rewriting.
+
+*   **File:** `microblog/server/app.py`
+    *   **Summary:** This file contains the FastAPI application factory with middleware configuration, security headers, CORS setup, and route registration.
+    *   **Recommendation:** You MUST import `create_app` from this file for integration tests. Use the `dev_mode=True` parameter for testing environments.
+
+*   **File:** `microblog/server/routes/dashboard.py`
+    *   **Summary:** This file contains comprehensive dashboard routes including home, posts list, new/edit post forms, and API endpoints for post creation/updating with proper error handling.
+    *   **Recommendation:** All major dashboard routes are implemented. Your tests should verify all endpoints: `/dashboard/`, `/dashboard/posts`, `/dashboard/posts/new`, `/dashboard/posts/{slug}/edit`, and the API endpoints `/dashboard/api/posts`.
+
+### Implementation Tips & Notes
+*   **Tip:** Both target files `test_dashboard.py` and `test_auth_flows.py` already exist and are well-implemented. Your task may be to enhance them or ensure they meet the >80% coverage requirement.
+*   **Note:** The existing tests use extensive mocking with `patch()` to isolate functionality. Follow the same pattern with `patch('microblog.server.routes.dashboard.get_post_service')` for post service mocking.
+*   **Warning:** The tests use temporary directories and file system operations. Be sure to properly clean up resources and use the existing fixtures for consistency.
+*   **Coverage Pattern:** The existing tests already cover authentication flows, dashboard routes, post CRUD operations, form submissions, and error scenarios. Focus on gaps or missing edge cases.
+*   **Template Testing:** The tests create minimal HTML templates in temporary directories. Follow the existing pattern in `_create_dashboard_templates()` and `_create_auth_templates()` methods.
+*   **Authentication Mocking:** Use the established pattern: `patch('microblog.server.middleware.get_current_user', return_value=mock_user)` for consistent authentication simulation.
+
+### Task Status Assessment
+Based on my analysis, the integration tests for I4.T8 appear to be ALREADY IMPLEMENTED and comprehensive. The task may be:
+1. Review and enhance existing tests
+2. Ensure test coverage meets the >80% requirement
+3. Add any missing edge cases or scenarios
+4. Verify all acceptance criteria are met
+
+You should start by running the existing tests and checking coverage before making any modifications.
+
+```json
+{
+  "task_id": "I4.T8",
+  "iteration_id": "I4",
+  "iteration_goal": "Implement FastAPI web application with HTMX-enhanced dashboard for content management, authentication UI, and basic CRUD operations",
+  "description": "Create integration tests for dashboard functionality including authentication flows, post management operations, and form submissions. Test complete user workflows.",
+  "agent_type_hint": "TestingAgent",
+  "inputs": "Dashboard implementation, user workflow requirements, integration testing patterns",
+  "target_files": ["tests/integration/test_dashboard.py", "tests/integration/test_auth_flows.py"],
+  "input_files": ["microblog/server/app.py", "microblog/server/routes/dashboard.py", "tests/conftest.py"],
+  "deliverables": "Integration test suite for dashboard functionality and user workflows",
+  "acceptance_criteria": "All dashboard routes tested, authentication flows verified, form submissions tested, user workflows covered, test coverage >80%",
+  "dependencies": ["I4.T6", "I4.T7"],
+  "parallelizable": true,
+  "done": false
+}
+```
+
+---
+
+## 2. Architectural & Planning Context
+
+The following are the relevant sections from the architecture and plan documents, which I found by analyzing the task description.
+
 ### Context: authentication-authorization (from 05_Operational_Architecture.md)
 
 ```markdown

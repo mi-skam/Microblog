@@ -8,43 +8,39 @@ The previous code submission did not pass verification. You must fix the followi
 
 Create integration tests for dashboard functionality including authentication flows, post management operations, and form submissions. Test complete user workflows.
 
+**Agent Type Hint:** TestingAgent
+**Inputs:** Dashboard implementation, user workflow requirements, integration testing patterns
+**Target Files:** ["tests/integration/test_dashboard.py", "tests/integration/test_auth_flows.py"]
+**Deliverables:** Integration test suite for dashboard functionality and user workflows
 **Acceptance Criteria:** All dashboard routes tested, authentication flows verified, form submissions tested, user workflows covered, test coverage >80%
 
 ---
 
 ## Issues Detected
 
-*   **Test Failure:** `test_unauthenticated_access_protection` in `test_dashboard.py` is failing because the unauthenticated client gets 500 errors instead of expected 302/401/404 status codes when accessing protected routes.
-*   **Test Failure:** `test_post_service_error_handling_integration` in `test_dashboard.py` is failing with assertion errors in the status code checks.
-*   **Test Failure:** `test_successful_login_flow` in `test_auth_flows.py` is failing because JWT cookies are not being set properly in the response.
-*   **Test Failure:** `test_auth_route_coverage` in `test_auth_flows.py` is failing because logout routes return unexpected status codes.
-*   **Coverage Issue:** Overall test coverage is only 24%, far below the required >80% threshold. Critical modules like authentication, content management, and dashboard routes need better coverage.
-*   **Linting Error:** Import block is unsorted in `tests/integration/test_auth_flows.py` line 8.
-*   **Linting Error:** Missing newline at end of file in `tests/integration/test_auth_flows.py` line 310.
+*   **Test Failure:** The test case `test_unauthenticated_access_protection` in `tests/integration/test_dashboard.py` is failing due to an exception in the FastAPI middleware stack when testing unauthenticated access.
+*   **Test Failure:** The test case `test_post_service_error_handling_integration` in `tests/integration/test_dashboard.py` is failing due to improper error handling when the post service is unavailable.
+*   **Test Failure:** The test case `test_auth_route_coverage` in `tests/integration/test_auth_flows.py` is failing because the logout template (`auth/logout.html`) is missing from the test template creation.
+*   **Coverage Issue:** Current test coverage is only 24%, significantly below the required >80% coverage. The tests need to be enhanced to cover more of the codebase functionality.
 
 ---
 
 ## Best Approach to Fix
 
-You MUST fix the failing integration tests by improving the mocking strategy and error handling:
+You MUST fix these specific issues:
 
-1. **Fix Authentication Test Failures:** Update the JWT cookie setting mechanism in `test_successful_login_flow` by properly configuring the FastAPI TestClient response and cookie handling.
+1. **Fix Missing Logout Template:** Add the missing `auth/logout.html` template in the `_create_auth_templates` method in `tests/integration/test_auth_flows.py` to resolve the template not found error.
 
-2. **Fix Dashboard Protection Tests:** Improve the mocking of authentication middleware in `test_unauthenticated_access_protection` to ensure unauthenticated requests get proper 302/401 redirects instead of 500 errors.
+2. **Fix Unauthenticated Access Test:** Modify the `test_unauthenticated_access_protection` test in `tests/integration/test_dashboard.py` to properly handle the middleware configuration for testing unauthenticated access without causing exceptions.
 
-3. **Fix Error Handling Tests:** Update the error scenario tests to handle the actual exception flow and status codes returned by the FastAPI application.
+3. **Fix Error Handling Test:** Fix the `test_post_service_error_handling_integration` test to properly mock service failures and handle the expected error responses.
 
-4. **Improve Test Coverage:** Add comprehensive tests for uncovered modules including:
-   - Authentication middleware integration tests
-   - Post service CRUD operations
-   - Content validation and error handling
-   - JWT token creation and verification
-   - Password hashing and verification
-   - Configuration management
-   - Template rendering integration
+4. **Enhance Test Coverage:** The current tests only achieve 24% coverage but need >80%. You must add more comprehensive tests that cover:
+   - More authentication middleware scenarios
+   - CSRF protection edge cases
+   - Complete form submission workflows
+   - Database interaction scenarios
+   - Template rendering edge cases
+   - Error handling for various failure modes
 
-5. **Fix Linting Issues:** Sort the imports in `test_auth_flows.py` and add the missing newline at the end of the file.
-
-6. **Enhance Mocking Strategy:** Use more realistic mocking that properly simulates the actual application behavior, especially for authentication flows and middleware integration.
-
-Focus on creating tests that achieve >80% coverage while ensuring all tests pass reliably. The tests should properly exercise the authentication flows, dashboard functionality, and complete user workflows as specified in the acceptance criteria.
+Focus on expanding test scenarios while maintaining the existing comprehensive test structure. The current tests are well-designed but need broader coverage to meet the acceptance criteria.

@@ -18,7 +18,7 @@ from microblog.server.middleware import (
     CSRFProtectionMiddleware,
     SecurityHeadersMiddleware,
 )
-from microblog.server.routes import auth, dashboard
+from microblog.server.routes import api, auth, dashboard
 from microblog.utils import get_content_dir
 
 logger = logging.getLogger(__name__)
@@ -98,6 +98,7 @@ def create_app(dev_mode: bool = False) -> FastAPI:
     # Register route modules
     app.include_router(auth.router)
     app.include_router(dashboard.router)
+    app.include_router(api.router)
 
     # Set up static file serving
     content_dir = get_content_dir()

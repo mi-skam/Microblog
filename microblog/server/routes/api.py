@@ -26,6 +26,7 @@ from microblog.content.post_service import (
     PostValidationError,
     get_post_service,
 )
+from microblog.content.tag_service import get_tag_service
 from microblog.server.build_service import get_build_service
 from microblog.server.middleware import require_authentication
 
@@ -1005,5 +1006,278 @@ async def get_build_queue_htmx(request: Request):
         logger.error(f"Unexpected error getting build queue: {e}")
         return HTMLResponse(
             content=_create_error_fragment("An unexpected error occurred while loading build queue"),
+            status_code=500
+        )
+
+
+@router.get("/tags/autocomplete", response_class=HTMLResponse)
+async def get_tag_autocomplete_htmx(request: Request, q: str = ""):
+    """
+    Get tag autocomplete suggestions via HTMX API.
+
+    Args:
+        q: Query string for tag autocomplete
+
+    Returns:
+        HTML fragment with tag suggestions
+    """
+    try:
+        # Require authentication
+        require_authentication(request)
+
+        # Get tag service
+        tag_service = get_tag_service()
+
+        # Get suggestions
+        suggestions = tag_service.get_tag_suggestions(q, limit=10, include_drafts=True)
+
+        if not suggestions:
+            return HTMLResponse(content="", status_code=200)
+
+        # Generate autocomplete HTML
+        suggestion_items = []
+        for suggestion in suggestions:
+            tag = suggestion['tag']
+            count = suggestion['count']
+            exact_match = suggestion.get('exact_match', False)
+            css_class = "autocomplete-exact" if exact_match else "autocomplete-suggestion"
+
+            # Escape single quotes for JavaScript
+            escaped_tag = tag.replace("'", "\\'")
+            suggestion_items.append(f'''
+            <div class="{css_class}"
+                 onclick="selectTag('{escaped_tag}')">
+                <span class="tag-name">{tag}</span>
+                <span class="tag-count">({count})</span>
+            </div>
+            ''')
+
+        autocomplete_html = f'''
+        <div class="tag-autocomplete-dropdown" id="tag-autocomplete">
+            {''.join(suggestion_items)}
+        </div>
+        '''
+
+        return HTMLResponse(content=autocomplete_html, status_code=200)
+
+    except Exception as e:
+        logger.error(f"Unexpected error in tag autocomplete: {e}")
+        return HTMLResponse(content="", status_code=200)
+
+
+@router.get("/tags", response_class=HTMLResponse)
+async def get_all_tags_htmx(request: Request, include_drafts: str = "true"):
+    """
+    Get all tags with usage statistics via HTMX API.
+
+    Args:
+        include_drafts: Whether to include tags from draft posts
+
+    Returns:
+        HTML fragment with tag list and statistics
+    """
+    try:
+        # Require authentication
+        require_authentication(request)
+
+        # Get tag service
+        tag_service = get_tag_service()
+        include_drafts_bool = include_drafts.lower() in ("true", "1", "yes")
+
+        # Get all tags and statistics
+        all_tags = tag_service.get_all_tags(include_drafts=include_drafts_bool)
+        stats = tag_service.get_tag_stats(include_drafts=include_drafts_bool)
+
+        # Generate tags HTML
+        if not all_tags:
+            tags_html = '''
+            <div class="alert alert-info">
+                <p>No tags found. Start adding tags to your posts to see them here!</p>
+            </div>
+            '''
+        else:
+            tag_items = []
+            for tag in all_tags:
+                usage_count = stats['most_used_tags'].get(tag, 0)
+                tag_items.append(f'''
+                <div class="tag-item d-flex justify-content-between align-items-center py-2 border-bottom">
+                    <div class="tag-info">
+                        <span class="tag-name fw-bold">{tag}</span>
+                        <small class="text-muted ms-2">Used {usage_count} time{'s' if usage_count != 1 else ''}</small>
+                    </div>
+                    <div class="tag-actions">
+                        <button class="btn btn-sm btn-outline-primary"
+                                hx-get="/api/posts/filter?tag={tag}&include_drafts={include_drafts}"
+                                hx-target="#posts-container"
+                                hx-swap="innerHTML">
+                            View Posts
+                        </button>
+                    </div>
+                </div>
+                ''')
+
+            # Statistics summary
+            stats_html = f'''
+            <div class="tag-stats mb-3 p-3 bg-light rounded">
+                <h6>Tag Statistics</h6>
+                <div class="row text-center">
+                    <div class="col">
+                        <strong>{stats['unique_tags']}</strong><br>
+                        <small class="text-muted">Unique Tags</small>
+                    </div>
+                    <div class="col">
+                        <strong>{stats['tagged_posts']}</strong><br>
+                        <small class="text-muted">Tagged Posts</small>
+                    </div>
+                    <div class="col">
+                        <strong>{stats['avg_tags_per_post']}</strong><br>
+                        <small class="text-muted">Avg per Post</small>
+                    </div>
+                </div>
+            </div>
+            '''
+
+            tags_html = f'''
+            {stats_html}
+            <div class="tag-list">
+                {''.join(tag_items)}
+            </div>
+            '''
+
+        return HTMLResponse(content=tags_html, status_code=200)
+
+    except Exception as e:
+        logger.error(f"Unexpected error getting all tags: {e}")
+        return HTMLResponse(
+            content=_create_error_fragment("An unexpected error occurred while loading tags"),
+            status_code=500
+        )
+
+
+@router.get("/posts/filter", response_class=HTMLResponse)
+async def filter_posts_by_tag_htmx(request: Request, tag: str = "", include_drafts: str = "false"):
+    """
+    Filter posts by tag via HTMX API.
+
+    Args:
+        tag: Tag to filter by
+        include_drafts: Whether to include draft posts
+
+    Returns:
+        HTML fragment with filtered posts
+    """
+    try:
+        # Require authentication
+        require_authentication(request)
+
+        # Get post service
+        post_service = get_post_service()
+        include_drafts_bool = include_drafts.lower() in ("true", "1", "yes")
+
+        # Get filtered posts
+        if tag:
+            posts = post_service.list_posts(
+                include_drafts=include_drafts_bool,
+                tag_filter=tag
+            )
+            title = f'Posts tagged with "{tag}"'
+        else:
+            posts = post_service.list_posts(include_drafts=include_drafts_bool)
+            title = "All Posts"
+
+        # Generate posts HTML
+        if not posts:
+            if tag:
+                posts_html = f'''
+                <div class="alert alert-info">
+                    <p>No posts found with tag "{tag}".</p>
+                    <button class="btn btn-sm btn-outline-secondary"
+                            hx-get="/api/posts/filter?include_drafts={include_drafts}"
+                            hx-target="#posts-container"
+                            hx-swap="innerHTML">
+                        Show All Posts
+                    </button>
+                </div>
+                '''
+            else:
+                posts_html = '''
+                <div class="alert alert-info">
+                    <p>No posts found.</p>
+                </div>
+                '''
+        else:
+            post_items = []
+            for post in posts:
+                status_badge = "Draft" if post.is_draft else "Published"
+                status_class = "secondary" if post.is_draft else "success"
+                tags_display = ", ".join(post.frontmatter.tags) if post.frontmatter.tags else "No tags"
+
+                post_items.append(f'''
+                <div class="post-item card mb-3">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h5 class="card-title mb-1">
+                                <a href="/dashboard/posts/{post.computed_slug}/edit"
+                                   class="text-decoration-none">{post.frontmatter.title}</a>
+                            </h5>
+                            <span class="badge bg-{status_class}">{status_badge}</span>
+                        </div>
+
+                        {f'<p class="card-text text-muted">{post.frontmatter.description}</p>' if post.frontmatter.description else ''}
+
+                        <div class="post-meta">
+                            <small class="text-muted">
+                                <strong>Date:</strong> {post.frontmatter.date.strftime('%Y-%m-%d')} |
+                                <strong>Tags:</strong> {tags_display}
+                            </small>
+                        </div>
+
+                        <div class="post-actions mt-2">
+                            <div class="btn-group">
+                                <a href="/dashboard/posts/{post.computed_slug}/edit"
+                                   class="btn btn-sm btn-outline-primary">Edit</a>
+                                <button class="btn btn-sm btn-outline-secondary"
+                                        hx-get="/preview/{post.computed_slug}"
+                                        hx-target="#preview-modal-body"
+                                        hx-swap="innerHTML"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#previewModal">
+                                    Preview
+                                </button>
+                                {'<button class="btn btn-sm btn-outline-success" hx-post="/api/posts/' + post.computed_slug + '/publish" hx-target="#form-messages" hx-swap="innerHTML">Publish</button>' if post.is_draft else '<button class="btn btn-sm btn-outline-warning" hx-post="/api/posts/' + post.computed_slug + '/unpublish" hx-target="#form-messages" hx-swap="innerHTML">Unpublish</button>'}
+                                <button class="btn btn-sm btn-outline-danger"
+                                        hx-delete="/api/posts/{post.computed_slug}"
+                                        hx-target="#form-messages"
+                                        hx-swap="innerHTML"
+                                        hx-confirm="Are you sure you want to delete this post?">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ''')
+
+            # Header with filter info
+            filter_header = f'''
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4>{title} ({len(posts)} post{'s' if len(posts) != 1 else ''})</h4>
+                {f'<button class="btn btn-sm btn-outline-secondary" hx-get="/api/posts/filter?include_drafts={include_drafts}" hx-target="#posts-container" hx-swap="innerHTML">Clear Filter</button>' if tag else ''}
+            </div>
+            '''
+
+            posts_html = f'''
+            {filter_header}
+            <div class="posts-list">
+                {''.join(post_items)}
+            </div>
+            '''
+
+        return HTMLResponse(content=posts_html, status_code=200)
+
+    except Exception as e:
+        logger.error(f"Unexpected error filtering posts by tag '{tag}': {e}")
+        return HTMLResponse(
+            content=_create_error_fragment("An unexpected error occurred while filtering posts"),
             status_code=500
         )

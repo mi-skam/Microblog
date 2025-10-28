@@ -68,12 +68,21 @@
         <!-- Post Tags -->
         <div class="form-group">
             <label for="tags">Tags</label>
-            <input type="text"
-                   id="tags"
-                   name="tags"
-                   value="{% if is_edit and post.frontmatter.tags %}{{ post.frontmatter.tags | join(', ') }}{% endif %}"
-                   placeholder="Separate tags with commas">
-            <small>Separate multiple tags with commas</small>
+            <div class="tag-input-container">
+                <input type="text"
+                       id="tags"
+                       name="tags"
+                       value="{% if is_edit and post.frontmatter.tags %}{{ post.frontmatter.tags | join(', ') }}{% endif %}"
+                       placeholder="Separate tags with commas"
+                       hx-get="/api/tags/autocomplete"
+                       hx-trigger="keyup changed delay:300ms"
+                       hx-vals="js:{q: document.getElementById('tags').value.split(',').pop().trim()}"
+                       hx-target="#tag-autocomplete-container"
+                       hx-swap="innerHTML"
+                       autocomplete="off">
+                <div id="tag-autocomplete-container" class="tag-autocomplete-container"></div>
+            </div>
+            <small>Separate multiple tags with commas. Start typing for suggestions.</small>
         </div>
 
         <!-- Post Date -->
@@ -484,6 +493,76 @@
     opacity: 0.6;
     cursor: not-allowed;
 }
+
+/* Tag Autocomplete Styles */
+.tag-input-container {
+    position: relative;
+}
+
+.tag-autocomplete-container {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: var(--pico-card-background-color);
+    border: var(--pico-border-width) solid var(--pico-border-color);
+    border-top: none;
+    border-radius: 0 0 var(--pico-border-radius) var(--pico-border-radius);
+    max-height: 200px;
+    overflow-y: auto;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.tag-autocomplete-dropdown {
+    display: block;
+}
+
+.autocomplete-suggestion,
+.autocomplete-exact {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    border-bottom: 1px solid var(--pico-border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 0.2s ease;
+}
+
+.autocomplete-suggestion:last-child,
+.autocomplete-exact:last-child {
+    border-bottom: none;
+}
+
+.autocomplete-suggestion:hover,
+.autocomplete-exact:hover {
+    background-color: var(--pico-primary-50);
+}
+
+.autocomplete-exact {
+    background-color: var(--pico-primary-100);
+    font-weight: 600;
+}
+
+.tag-name {
+    font-weight: 500;
+}
+
+.tag-count {
+    font-size: 0.875rem;
+    color: var(--pico-muted-color);
+    font-weight: normal;
+}
+
+/* Focus state for tag input */
+#tags:focus + .tag-autocomplete-container {
+    border-color: var(--pico-primary-500);
+}
+
+/* Hide autocomplete when input is not focused */
+.tag-input-container:not(:focus-within) .tag-autocomplete-container {
+    display: none;
+}
 </style>
 {% endblock %}
 
@@ -570,6 +649,87 @@ document.querySelector('.form-actions a').addEventListener('click', function(e) 
     if (hasContent && !confirm('Are you sure you want to leave? Any unsaved changes will be lost.')) {
         e.preventDefault();
     }
+});
+
+// Tag autocomplete functionality
+function selectTag(selectedTag) {
+    const tagsInput = document.getElementById('tags');
+    const currentValue = tagsInput.value;
+    const tags = currentValue.split(',').map(tag => tag.trim());
+
+    // Remove the last incomplete tag (the one being typed)
+    tags.pop();
+
+    // Add the selected tag if it's not already in the list
+    const tagExists = tags.some(tag => tag.toLowerCase() === selectedTag.toLowerCase());
+    if (!tagExists) {
+        tags.push(selectedTag);
+    }
+
+    // Update the input value
+    tagsInput.value = tags.join(', ') + (tags.length > 0 ? ', ' : '');
+
+    // Clear autocomplete
+    document.getElementById('tag-autocomplete-container').innerHTML = '';
+
+    // Focus back on the input for continued typing
+    tagsInput.focus();
+}
+
+// Hide autocomplete when clicking outside
+document.addEventListener('click', function(e) {
+    const tagInputContainer = document.querySelector('.tag-input-container');
+    const autocompleteContainer = document.getElementById('tag-autocomplete-container');
+
+    if (tagInputContainer && !tagInputContainer.contains(e.target)) {
+        autocompleteContainer.innerHTML = '';
+    }
+});
+
+// Handle keyboard navigation in autocomplete
+document.getElementById('tags').addEventListener('keydown', function(e) {
+    const autocompleteContainer = document.getElementById('tag-autocomplete-container');
+    const suggestions = autocompleteContainer.querySelectorAll('.autocomplete-suggestion, .autocomplete-exact');
+
+    if (suggestions.length === 0) return;
+
+    let currentSelected = autocompleteContainer.querySelector('.selected');
+    let selectedIndex = -1;
+
+    if (currentSelected) {
+        selectedIndex = Array.from(suggestions).indexOf(currentSelected);
+    }
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (currentSelected) currentSelected.classList.remove('selected');
+        selectedIndex = (selectedIndex + 1) % suggestions.length;
+        suggestions[selectedIndex].classList.add('selected');
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (currentSelected) currentSelected.classList.remove('selected');
+        selectedIndex = selectedIndex <= 0 ? suggestions.length - 1 : selectedIndex - 1;
+        suggestions[selectedIndex].classList.add('selected');
+    } else if (e.key === 'Enter' && currentSelected) {
+        e.preventDefault();
+        const tagName = currentSelected.querySelector('.tag-name').textContent;
+        selectTag(tagName);
+    } else if (e.key === 'Escape') {
+        autocompleteContainer.innerHTML = '';
+        e.target.blur();
+    }
+});
+
+// Add keyboard selection styling
+document.addEventListener('DOMContentLoaded', function() {
+    const style = document.createElement('style');
+    style.textContent = `
+        .autocomplete-suggestion.selected,
+        .autocomplete-exact.selected {
+            background-color: var(--pico-primary-200) !important;
+        }
+    `;
+    document.head.appendChild(style);
 });
 </script>
 {% endblock %}

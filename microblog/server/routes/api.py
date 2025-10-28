@@ -26,6 +26,7 @@ from microblog.content.post_service import (
     PostValidationError,
     get_post_service,
 )
+from microblog.server.build_service import get_build_service
 from microblog.server.middleware import require_authentication
 
 logger = logging.getLogger(__name__)
@@ -621,5 +622,388 @@ async def list_images_htmx(request: Request):
         logger.error(f"Unexpected error listing images via HTMX: {e}")
         return HTMLResponse(
             content=_create_error_fragment("An unexpected error occurred while loading images"),
+            status_code=500
+        )
+
+
+@router.post("/build", response_class=HTMLResponse)
+async def trigger_build_htmx(request: Request):
+    """
+    Trigger a site build via HTMX API.
+
+    Returns:
+        HTML fragment with build status or error details
+    """
+    try:
+        # Require authentication
+        user = require_authentication(request)
+
+        # CSRF validation is handled by middleware for /api/ paths
+
+        # Get build service
+        build_service = get_build_service()
+
+        # Queue the build
+        try:
+            job_id = build_service.queue_build(user_id=user.get('username'))
+            logger.info(f"Build triggered via HTMX by user {user['username']}: job {job_id}")
+
+            # Return success fragment with build status
+            success_html = f'''
+            <div class="alert alert-info" hx-swap-oob="true" id="build-status">
+                <p><strong>Build Queued</strong></p>
+                <p>Your build has been added to the queue. Job ID: <code>{job_id}</code></p>
+                <div class="progress mb-2">
+                    <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div class="build-details">
+                    <small class="text-muted">Status: Queued</small>
+                </div>
+            </div>
+            <div hx-get="/api/build/{job_id}/status"
+                 hx-trigger="every 1s"
+                 hx-target="#build-status"
+                 hx-swap="outerHTML">
+            </div>
+            '''
+
+            return HTMLResponse(content=success_html, status_code=202)
+
+        except RuntimeError as e:
+            return HTMLResponse(
+                content=_create_error_fragment(f"Build queue error: {str(e)}"),
+                status_code=429
+            )
+
+    except Exception as e:
+        logger.error(f"Unexpected error triggering build via HTMX: {e}")
+        return HTMLResponse(
+            content=_create_error_fragment("An unexpected error occurred while triggering the build"),
+            status_code=500
+        )
+
+
+@router.get("/build/{job_id}/status", response_class=HTMLResponse)
+async def get_build_status_htmx(request: Request, job_id: str):
+    """
+    Get build status for a specific job via HTMX API.
+
+    Args:
+        job_id: Build job ID
+
+    Returns:
+        HTML fragment with current build status
+    """
+    try:
+        # Require authentication
+        require_authentication(request)
+
+        # Get build service
+        build_service = get_build_service()
+
+        # Get job status
+        job = build_service.get_job_status(job_id)
+        if not job:
+            return HTMLResponse(
+                content=_create_error_fragment(f"Build job {job_id} not found"),
+                status_code=404
+            )
+
+        # Generate status HTML based on job state
+        if job.status.value == "queued":
+            queue_position = len([j for j in build_service.get_build_queue() if j.created_at <= job.created_at])
+            status_html = f'''
+            <div class="alert alert-info" id="build-status">
+                <p><strong>Build Queued</strong></p>
+                <p>Job ID: <code>{job_id}</code></p>
+                <div class="progress mb-2">
+                    <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div class="build-details">
+                    <small class="text-muted">Position in queue: {queue_position}</small>
+                </div>
+            </div>
+            <div hx-get="/api/build/{job_id}/status"
+                 hx-trigger="every 1s"
+                 hx-target="#build-status"
+                 hx-swap="outerHTML">
+            </div>
+            '''
+
+        elif job.status.value == "running":
+            progress = job.current_progress
+            if progress:
+                progress_percent = progress.percentage
+                phase_name = progress.phase.value.replace('_', ' ').title()
+                progress_message = progress.message
+            else:
+                progress_percent = 0
+                phase_name = "Starting"
+                progress_message = "Build is starting..."
+
+            status_html = f'''
+            <div class="alert alert-primary" id="build-status">
+                <p><strong>Build Running</strong></p>
+                <p>Job ID: <code>{job_id}</code></p>
+                <div class="progress mb-2">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                         role="progressbar"
+                         style="width: {progress_percent}%"
+                         aria-valuenow="{progress_percent}"
+                         aria-valuemin="0"
+                         aria-valuemax="100">
+                        {progress_percent:.1f}%
+                    </div>
+                </div>
+                <div class="build-details">
+                    <p class="mb-1"><strong>Phase:</strong> {phase_name}</p>
+                    <small class="text-muted">{progress_message}</small>
+                </div>
+            </div>
+            <div hx-get="/api/build/{job_id}/status"
+                 hx-trigger="every 1s"
+                 hx-target="#build-status"
+                 hx-swap="outerHTML">
+            </div>
+            '''
+
+        elif job.status.value == "completed":
+            duration = job.result.duration if job.result else 0
+            stats_html = ""
+            if job.result and job.result.stats:
+                stats = job.result.stats
+                stats_items = []
+                if 'content' in stats:
+                    stats_items.append(f"Posts: {stats['content'].get('processed_posts', 0)}")
+                if 'rendering' in stats:
+                    stats_items.append(f"Pages: {stats['rendering'].get('pages_rendered', 0)}")
+                if 'assets' in stats:
+                    stats_items.append(f"Assets: {stats['assets'].get('total_successful', 0)}")
+                if stats_items:
+                    stats_html = f"<small class='text-muted'>{' | '.join(stats_items)}</small>"
+
+            status_html = f'''
+            <div class="alert alert-success" id="build-status">
+                <p><strong>Build Completed Successfully!</strong></p>
+                <p>Job ID: <code>{job_id}</code></p>
+                <div class="progress mb-2">
+                    <div class="progress-bar bg-success" role="progressbar" style="width: 100%">100%</div>
+                </div>
+                <div class="build-details">
+                    <p class="mb-1">Completed in {duration:.1f} seconds</p>
+                    {stats_html}
+                </div>
+                <button class="btn btn-sm btn-outline-secondary mt-2"
+                        hx-get="/api/build/recent"
+                        hx-target="#build-status"
+                        hx-swap="outerHTML">
+                    View Recent Builds
+                </button>
+            </div>
+            '''
+
+        elif job.status.value == "failed":
+            error_message = job.error_message or "Unknown error"
+            duration = job.result.duration if job.result else 0
+
+            status_html = f'''
+            <div class="alert alert-danger" id="build-status">
+                <p><strong>Build Failed</strong></p>
+                <p>Job ID: <code>{job_id}</code></p>
+                <div class="progress mb-2">
+                    <div class="progress-bar bg-danger" role="progressbar" style="width: 100%">Failed</div>
+                </div>
+                <div class="build-details">
+                    <p class="mb-1"><strong>Error:</strong> {error_message}</p>
+                    <small class="text-muted">Failed after {duration:.1f} seconds</small>
+                </div>
+                <button class="btn btn-sm btn-outline-primary mt-2"
+                        hx-post="/api/build"
+                        hx-target="#build-status"
+                        hx-swap="outerHTML">
+                    Retry Build
+                </button>
+            </div>
+            '''
+
+        else:  # cancelled
+            status_html = f'''
+            <div class="alert alert-warning" id="build-status">
+                <p><strong>Build Cancelled</strong></p>
+                <p>Job ID: <code>{job_id}</code></p>
+                <div class="progress mb-2">
+                    <div class="progress-bar bg-warning" role="progressbar" style="width: 0%">Cancelled</div>
+                </div>
+                <button class="btn btn-sm btn-outline-primary mt-2"
+                        hx-post="/api/build"
+                        hx-target="#build-status"
+                        hx-swap="outerHTML">
+                    Start New Build
+                </button>
+            </div>
+            '''
+
+        return HTMLResponse(content=status_html, status_code=200)
+
+    except Exception as e:
+        logger.error(f"Unexpected error getting build status for job {job_id}: {e}")
+        return HTMLResponse(
+            content=_create_error_fragment("An unexpected error occurred while getting build status"),
+            status_code=500
+        )
+
+
+@router.get("/build/recent", response_class=HTMLResponse)
+async def get_recent_builds_htmx(request: Request):
+    """
+    Get recent builds via HTMX API.
+
+    Returns:
+        HTML fragment with recent build history
+    """
+    try:
+        # Require authentication
+        require_authentication(request)
+
+        # Get build service
+        build_service = get_build_service()
+
+        # Get recent builds
+        recent_builds = build_service.get_recent_builds(limit=5)
+
+        if not recent_builds:
+            history_html = '''
+            <div class="alert alert-info" id="build-status">
+                <p><strong>No Recent Builds</strong></p>
+                <p>No build history available.</p>
+                <button class="btn btn-sm btn-outline-primary mt-2"
+                        hx-post="/api/build"
+                        hx-target="#build-status"
+                        hx-swap="outerHTML">
+                    Start First Build
+                </button>
+            </div>
+            '''
+        else:
+            build_items = []
+            for job in recent_builds:
+                status_class = "success" if job.status.value == "completed" else "danger"
+                status_text = "✓" if job.status.value == "completed" else "✗"
+                duration = job.result.duration if job.result else 0
+
+                build_items.append(f'''
+                <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                    <div>
+                        <span class="badge bg-{status_class}">{status_text}</span>
+                        <code class="ms-2">{job.job_id[:8]}...</code>
+                        <small class="text-muted ms-2">
+                            {job.completed_at.strftime("%Y-%m-%d %H:%M:%S") if job.completed_at else "Unknown"}
+                        </small>
+                    </div>
+                    <div>
+                        <small class="text-muted">{duration:.1f}s</small>
+                    </div>
+                </div>
+                ''')
+
+            history_html = f'''
+            <div class="card" id="build-status">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">Recent Builds</h6>
+                    <button class="btn btn-sm btn-outline-primary"
+                            hx-post="/api/build"
+                            hx-target="#build-status"
+                            hx-swap="outerHTML">
+                        New Build
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="build-history">
+                        {''.join(build_items)}
+                    </div>
+                </div>
+            </div>
+            '''
+
+        return HTMLResponse(content=history_html, status_code=200)
+
+    except Exception as e:
+        logger.error(f"Unexpected error getting recent builds: {e}")
+        return HTMLResponse(
+            content=_create_error_fragment("An unexpected error occurred while loading recent builds"),
+            status_code=500
+        )
+
+
+@router.get("/build/queue", response_class=HTMLResponse)
+async def get_build_queue_htmx(request: Request):
+    """
+    Get build queue status via HTMX API.
+
+    Returns:
+        HTML fragment with current build queue
+    """
+    try:
+        # Require authentication
+        require_authentication(request)
+
+        # Get build service
+        build_service = get_build_service()
+
+        # Get current build and queue
+        current_build = build_service.get_current_build()
+        queued_builds = build_service.get_build_queue()
+
+        queue_html = '<div class="card" id="build-queue">'
+        queue_html += '<div class="card-header"><h6 class="mb-0">Build Queue Status</h6></div>'
+        queue_html += '<div class="card-body">'
+
+        if current_build:
+            progress = current_build.current_progress
+            if progress:
+                progress_percent = progress.percentage
+                phase_name = progress.phase.value.replace('_', ' ').title()
+            else:
+                progress_percent = 0
+                phase_name = "Starting"
+
+            queue_html += f'''
+            <div class="mb-3">
+                <h6 class="text-primary">Currently Building</h6>
+                <div class="d-flex justify-content-between align-items-center">
+                    <code>{current_build.job_id[:8]}...</code>
+                    <small class="text-muted">{phase_name}</small>
+                </div>
+                <div class="progress mt-1">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                         style="width: {progress_percent}%"></div>
+                </div>
+            </div>
+            '''
+
+        if queued_builds:
+            queue_html += '<h6 class="text-info">Queued Builds</h6>'
+            for i, job in enumerate(queued_builds):
+                queue_html += f'''
+                <div class="d-flex justify-content-between align-items-center py-1">
+                    <div>
+                        <span class="badge bg-secondary">{i + 1}</span>
+                        <code class="ms-2">{job.job_id[:8]}...</code>
+                    </div>
+                    <small class="text-muted">{job.created_at.strftime("%H:%M:%S")}</small>
+                </div>
+                '''
+        else:
+            if not current_build:
+                queue_html += '<p class="text-muted mb-0">No builds queued or running.</p>'
+
+        queue_html += '</div></div>'
+
+        return HTMLResponse(content=queue_html, status_code=200)
+
+    except Exception as e:
+        logger.error(f"Unexpected error getting build queue: {e}")
+        return HTMLResponse(
+            content=_create_error_fragment("An unexpected error occurred while loading build queue"),
             status_code=500
         )

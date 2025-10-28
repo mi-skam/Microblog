@@ -9,12 +9,25 @@
 
 {% block content %}
 <div class="post-editor">
-    <form method="post" action="{% if is_edit %}/dashboard/api/posts/{{ post.computed_slug }}{% else %}/dashboard/api/posts{% endif %}"
+    <form method="post"
+          {% if is_edit %}
+          hx-put="/api/posts/{{ post.computed_slug }}"
+          {% else %}
+          hx-post="/api/posts"
+          {% endif %}
+          hx-target="#form-messages"
+          hx-swap="innerHTML"
+          hx-indicator="#form-spinner"
           class="post-form" id="post-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        {% if is_edit %}
-        <input type="hidden" name="_method" value="PUT">
-        {% endif %}
+
+        <!-- Form Messages Container -->
+        <div id="form-messages"></div>
+
+        <!-- Form Loading Indicator -->
+        <div id="form-spinner" class="htmx-indicator form-loading">
+            <p>Saving post...</p>
+        </div>
 
         <!-- Post Title -->
         <div class="form-group">
@@ -24,7 +37,12 @@
                    name="title"
                    value="{% if is_edit %}{{ post.frontmatter.title }}{% endif %}"
                    required
-                   placeholder="Enter post title">
+                   placeholder="Enter post title"
+                   hx-post="/api/validate/title"
+                   hx-trigger="blur changed"
+                   hx-target="#title-feedback"
+                   hx-swap="innerHTML">
+            <div id="title-feedback" class="field-feedback"></div>
         </div>
 
         <!-- Post Slug -->
@@ -397,6 +415,75 @@
     font-size: 0.875rem;
     color: var(--pico-muted-color);
 }
+
+/* Form Loading States */
+.form-loading {
+    display: none;
+    text-align: center;
+    padding: 1rem;
+    background: var(--pico-primary-50);
+    border: 1px solid var(--pico-primary-200);
+    border-radius: var(--pico-border-radius);
+    margin-bottom: 1rem;
+    color: var(--pico-primary-700);
+}
+
+.form-loading.htmx-request {
+    display: block;
+}
+
+/* Field Feedback */
+.field-feedback {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.field-feedback.success {
+    color: var(--pico-color-green-600);
+}
+
+.field-feedback.error {
+    color: var(--pico-color-red-600);
+}
+
+.field-feedback.warning {
+    color: var(--pico-color-amber-600);
+}
+
+/* Form Messages */
+#form-messages {
+    margin-bottom: 1rem;
+}
+
+#form-messages .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--pico-border-radius);
+    margin-bottom: 0.5rem;
+    border: 1px solid;
+}
+
+#form-messages .alert-success {
+    background: var(--pico-color-green-50);
+    border-color: var(--pico-color-green-200);
+    color: var(--pico-color-green-700);
+}
+
+#form-messages .alert-error {
+    background: var(--pico-color-red-50);
+    border-color: var(--pico-color-red-200);
+    color: var(--pico-color-red-700);
+}
+
+/* Form HTMX Loading States */
+.post-form.htmx-request {
+    opacity: 0.8;
+    pointer-events: none;
+}
+
+.post-form.htmx-request .form-actions button {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
 </style>
 {% endblock %}
 
@@ -431,49 +518,44 @@ document.getElementById('title').addEventListener('input', function(e) {
     }
 });
 
-// Form submission handling
-document.getElementById('post-form').addEventListener('submit', function(e) {
-    e.preventDefault();
+// HTMX Event Handling for Form Submission
+document.addEventListener('DOMContentLoaded', function() {
+    const postForm = document.getElementById('post-form');
 
-    const formData = new FormData(this);
-    const method = formData.get('_method') || 'POST';
-    const url = this.action;
-
-    // Convert checkbox to boolean string
-    const draftCheckbox = document.getElementById('draft');
-    formData.set('draft', draftCheckbox.checked ? 'true' : 'false');
-
-    // Remove the _method field from form data since we'll use it in fetch options
-    formData.delete('_method');
-
-    // Show loading state
-    const submitBtn = this.querySelector('button[type="submit"]');
-    const originalText = submitBtn.textContent;
-    submitBtn.textContent = 'Saving...';
-    submitBtn.disabled = true;
-
-    fetch(url, {
-        method: method,
-        body: formData,
-        headers: {
-            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+    // Handle successful form submission
+    postForm.addEventListener('htmx:afterSwap', function(event) {
+        // Check if the response contains a success message
+        const formMessages = document.getElementById('form-messages');
+        if (formMessages && formMessages.innerHTML.includes('alert-success')) {
+            // Auto-redirect to posts list after 2 seconds on success
+            setTimeout(() => {
+                window.location.href = '/dashboard/posts';
+            }, 2000);
         }
-    })
-    .then(response => {
-        if (response.ok) {
-            // Redirect to posts list on success
-            window.location.href = '/dashboard/posts';
-        } else {
-            throw new Error('Failed to save post');
-        }
-    })
-    .catch(error => {
-        console.error('Error saving post:', error);
-        alert('Failed to save post. Please try again.');
+    });
 
-        // Restore button state
-        submitBtn.textContent = originalText;
-        submitBtn.disabled = false;
+    // Handle form submission errors
+    postForm.addEventListener('htmx:responseError', function(event) {
+        const formMessages = document.getElementById('form-messages');
+        formMessages.innerHTML = '<div class="alert alert-error"><p>Failed to save post. Please check your inputs and try again.</p></div>';
+    });
+
+    // Convert checkbox to proper boolean string before submission
+    postForm.addEventListener('htmx:beforeRequest', function(event) {
+        const draftCheckbox = document.getElementById('draft');
+        const hiddenDraftInput = document.createElement('input');
+        hiddenDraftInput.type = 'hidden';
+        hiddenDraftInput.name = 'draft';
+        hiddenDraftInput.value = draftCheckbox.checked ? 'true' : 'false';
+
+        // Remove any existing hidden draft input
+        const existingHidden = postForm.querySelector('input[type="hidden"][name="draft"]');
+        if (existingHidden) {
+            existingHidden.remove();
+        }
+
+        // Add the new hidden input
+        postForm.appendChild(hiddenDraftInput);
     });
 });
 

@@ -12,6 +12,7 @@
     document.addEventListener('DOMContentLoaded', function() {
         initializePreviewEnhancements();
         initializeFormEnhancements();
+        initializeHTMXEnhancements();
     });
 
     /**
@@ -199,13 +200,22 @@
 
         // Auto-save periodically
         setInterval(function() {
-            if (!isFormEmpty()) {
+            if (!isFormEmpty() && !postForm.classList.contains('htmx-request')) {
                 saveDraft();
             }
         }, AUTO_SAVE_INTERVAL);
 
         // Save draft when leaving page
         window.addEventListener('beforeunload', saveDraft);
+
+        // Clear auto-save on successful HTMX form submission
+        postForm.addEventListener('htmx:afterSwap', function(event) {
+            const formMessages = document.getElementById('form-messages');
+            if (formMessages && formMessages.innerHTML.includes('alert-success')) {
+                // Clear auto-save on successful submission
+                localStorage.removeItem(AUTO_SAVE_KEY);
+            }
+        });
 
         function isFormEmpty() {
             const formData = new FormData(postForm);
@@ -214,6 +224,11 @@
 
         function saveDraft() {
             try {
+                // Don't auto-save during HTMX request
+                if (postForm.classList.contains('htmx-request')) {
+                    return;
+                }
+
                 const formData = new FormData(postForm);
                 const draftData = {
                     data: {
@@ -222,7 +237,7 @@
                         description: formData.get('description'),
                         tags: formData.get('tags'),
                         slug: formData.get('new_slug'),
-                        draft: formData.get('draft')
+                        draft: document.getElementById('draft').checked
                     },
                     timestamp: Date.now()
                 };
@@ -236,9 +251,9 @@
         function restoreDraft(draftData) {
             Object.entries(draftData).forEach(([key, value]) => {
                 const input = postForm.querySelector(`[name="${key}"], [name="new_${key}"]`);
-                if (input && value) {
+                if (input && value !== null && value !== undefined) {
                     if (input.type === 'checkbox') {
-                        input.checked = value === 'true';
+                        input.checked = value === true;
                     } else {
                         input.value = value;
                     }
@@ -271,14 +286,22 @@
             hasUnsavedChanges = !formDataEqual(initialFormData, currentFormData);
         });
 
-        // Clear warning on successful submit
+        // Clear warning on successful HTMX submit
+        postForm.addEventListener('htmx:afterSwap', function(event) {
+            const formMessages = document.getElementById('form-messages');
+            if (formMessages && formMessages.innerHTML.includes('alert-success')) {
+                hasUnsavedChanges = false;
+            }
+        });
+
+        // Also clear on regular form submit (fallback)
         postForm.addEventListener('submit', function() {
             hasUnsavedChanges = false;
         });
 
         // Warn before leaving page
         window.addEventListener('beforeunload', function(e) {
-            if (hasUnsavedChanges) {
+            if (hasUnsavedChanges && !postForm.classList.contains('htmx-request')) {
                 e.preventDefault();
                 e.returnValue = '';
                 return '';
@@ -292,6 +315,75 @@
             if (keys1.length !== keys2.length) return false;
 
             return keys1.every(key => fd1.get(key) === fd2.get(key));
+        }
+    }
+
+    /**
+     * Initialize HTMX-specific enhancements
+     */
+    function initializeHTMXEnhancements() {
+        // Auto-hide success/error messages after 5 seconds
+        document.body.addEventListener('htmx:afterSwap', function(event) {
+            autoHideMessages();
+        });
+
+        // Show loading indicators for long-running operations
+        document.body.addEventListener('htmx:beforeRequest', function(event) {
+            const target = event.target;
+
+            // Add subtle loading effects for buttons
+            if (target.tagName === 'BUTTON') {
+                target.style.opacity = '0.7';
+                target.style.cursor = 'wait';
+            }
+        });
+
+        document.body.addEventListener('htmx:afterRequest', function(event) {
+            const target = event.target;
+
+            // Remove loading effects
+            if (target.tagName === 'BUTTON') {
+                target.style.opacity = '';
+                target.style.cursor = '';
+            }
+        });
+
+        // Handle HTMX errors gracefully
+        document.body.addEventListener('htmx:responseError', function(event) {
+            console.error('HTMX request failed:', event.detail);
+            showErrorMessage('Operation failed. Please try again.');
+        });
+
+        document.body.addEventListener('htmx:timeout', function(event) {
+            console.warn('HTMX request timed out:', event.detail);
+            showErrorMessage('Request timed out. Please check your connection and try again.');
+        });
+
+        function autoHideMessages() {
+            const containers = ['#success-container', '#error-container', '#form-messages'];
+
+            containers.forEach(selector => {
+                const container = document.querySelector(selector);
+                if (container && container.innerHTML.trim()) {
+                    setTimeout(() => {
+                        if (container.innerHTML.includes('alert-success')) {
+                            container.innerHTML = '';
+                        }
+                    }, 5000);
+                }
+            });
+        }
+
+        function showErrorMessage(message) {
+            const errorContainer = document.getElementById('error-container') ||
+                                 document.getElementById('form-messages');
+
+            if (errorContainer) {
+                errorContainer.innerHTML = `<div class="alert alert-error"><p>${message}</p></div>`;
+                setTimeout(() => {
+                    errorContainer.innerHTML = '';
+                }, 5000);
+            }
         }
     }
 

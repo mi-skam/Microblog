@@ -15,6 +15,10 @@
 {% endblock %}
 
 {% block content %}
+<!-- Message Containers for HTMX -->
+<div id="success-container"></div>
+<div id="error-container"></div>
+
 <!-- Error Display -->
 {% if error %}
 <div class="error-message" role="alert">
@@ -112,23 +116,36 @@
                             {% if post.is_draft %}
                             <button type="button"
                                     class="btn-small outline"
-                                    onclick="publishPost('{{ post.computed_slug }}')"
+                                    hx-post="/api/posts/{{ post.computed_slug }}/publish"
+                                    hx-target="#posts-table"
+                                    hx-swap="outerHTML"
+                                    hx-indicator="#publish-indicator-{{ loop.index }}"
                                     title="Publish post">
+                                <span id="publish-indicator-{{ loop.index }}" class="htmx-indicator">Publishing...</span>
                                 Publish
                             </button>
                             {% else %}
                             <button type="button"
                                     class="btn-small outline secondary"
-                                    onclick="unpublishPost('{{ post.computed_slug }}')"
+                                    hx-post="/api/posts/{{ post.computed_slug }}/unpublish"
+                                    hx-target="#posts-table"
+                                    hx-swap="outerHTML"
+                                    hx-indicator="#unpublish-indicator-{{ loop.index }}"
                                     title="Unpublish post">
+                                <span id="unpublish-indicator-{{ loop.index }}" class="htmx-indicator">Unpublishing...</span>
                                 Unpublish
                             </button>
                             {% endif %}
 
                             <button type="button"
                                     class="btn-small outline secondary delete-btn"
-                                    onclick="deletePost('{{ post.computed_slug }}', '{{ post.frontmatter.title }}')"
+                                    hx-delete="/api/posts/{{ post.computed_slug }}"
+                                    hx-confirm="Are you sure you want to delete '{{ post.frontmatter.title }}'? This action cannot be undone."
+                                    hx-target="#posts-table"
+                                    hx-swap="outerHTML"
+                                    hx-indicator="#delete-indicator-{{ loop.index }}"
                                     title="Delete post">
+                                <span id="delete-indicator-{{ loop.index }}" class="htmx-indicator">Deleting...</span>
                                 Delete
                             </button>
                         </div>
@@ -147,23 +164,6 @@
     </div>
 </div>
 
-<!-- Delete Confirmation Modal -->
-<dialog id="delete-modal">
-    <article>
-        <header>
-            <button aria-label="Close" rel="prev" onclick="closeDeleteModal()"></button>
-            <h3>Confirm Delete</h3>
-        </header>
-        <main>
-            <p>Are you sure you want to delete the post "<strong id="delete-post-title"></strong>"?</p>
-            <p><small>This action cannot be undone.</small></p>
-        </main>
-        <footer>
-            <button class="secondary" onclick="closeDeleteModal()">Cancel</button>
-            <button class="delete-confirm-btn" onclick="confirmDelete()">Delete Post</button>
-        </footer>
-    </article>
-</dialog>
 {% endblock %}
 
 {% block extra_styles %}
@@ -393,6 +393,85 @@
     border-color: var(--pico-color-red-600);
 }
 
+/* HTMX Loading Indicators */
+.htmx-indicator {
+    display: none;
+    color: var(--pico-primary-500);
+    font-size: 0.75rem;
+    margin-right: 0.25rem;
+}
+
+.htmx-request .htmx-indicator {
+    display: inline;
+}
+
+.htmx-request {
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+/* Enhanced button states for HTMX interactions */
+.btn-small.htmx-request {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Table loading state */
+#posts-table.htmx-request {
+    opacity: 0.7;
+    position: relative;
+}
+
+#posts-table.htmx-request::after {
+    content: "Loading...";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--pico-card-background-color);
+    padding: 0.5rem 1rem;
+    border-radius: var(--pico-border-radius);
+    border: 1px solid var(--pico-border-color);
+    font-size: 0.875rem;
+    color: var(--pico-muted-color);
+    z-index: 10;
+}
+
+/* Filter loading state */
+#status-filter.htmx-request {
+    opacity: 0.7;
+    background-image: url("data:image/svg+xml,%3csvg width='20' height='20' xmlns='http://www.w3.org/2000/svg'%3e%3cg%3e%3ccircle cx='10' cy='10' r='8' stroke='%23666' stroke-width='2' fill='none'/%3e%3cpath d='M14,6 L10,10'/%3e%3cpath d='M6,6 L10,10'/%3e%3c/g%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 16px 16px;
+}
+
+/* Success/Error Messages */
+.alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--pico-border-radius);
+    margin-bottom: 1rem;
+    border: 1px solid;
+}
+
+.alert-success {
+    background: var(--pico-color-green-50);
+    border-color: var(--pico-color-green-200);
+    color: var(--pico-color-green-700);
+}
+
+.alert-error {
+    background: var(--pico-color-red-50);
+    border-color: var(--pico-color-red-200);
+    color: var(--pico-color-red-700);
+}
+
+.alert-warning {
+    background: var(--pico-color-amber-50);
+    border-color: var(--pico-color-amber-200);
+    color: var(--pico-color-amber-700);
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .stats-grid {
@@ -411,13 +490,18 @@
     .btn-small {
         text-align: center;
     }
+
+    .htmx-indicator {
+        display: block;
+        font-size: 0.7rem;
+    }
 }
 </style>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-// Filter posts by status
+// Filter posts by status (client-side filtering)
 function filterPosts(status) {
     const rows = document.querySelectorAll('.post-row');
 
@@ -432,63 +516,50 @@ function filterPosts(status) {
     });
 }
 
-// Delete post confirmation
-let deletePostSlug = null;
-
-function deletePost(slug, title) {
-    deletePostSlug = slug;
-    document.getElementById('delete-post-title').textContent = title;
-    document.getElementById('delete-modal').showModal();
-}
-
-function closeDeleteModal() {
-    document.getElementById('delete-modal').close();
-    deletePostSlug = null;
-}
-
-function confirmDelete() {
-    if (deletePostSlug) {
-        // HTMX request to delete post
-        htmx.ajax('DELETE', `/api/posts/${deletePostSlug}`, {
-            headers: {
-                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-            }
-        }).then(() => {
-            // Reload the page to refresh the posts list
-            window.location.reload();
-        }).catch(error => {
-            console.error('Error deleting post:', error);
-            alert('Failed to delete post. Please try again.');
-        });
+// HTMX event listeners for enhanced user feedback
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-hide success/error messages after 5 seconds
+    function autoHideMessage(container) {
+        if (container && container.innerHTML.trim()) {
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
     }
-    closeDeleteModal();
-}
 
-// Publish/Unpublish post
-function publishPost(slug) {
-    htmx.ajax('POST', `/api/posts/${slug}/publish`, {
-        headers: {
-            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-        }
-    }).then(() => {
-        window.location.reload();
-    }).catch(error => {
-        console.error('Error publishing post:', error);
-        alert('Failed to publish post. Please try again.');
+    // Listen for HTMX afterSwap events to auto-hide messages
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+        autoHideMessage(document.getElementById('success-container'));
+        autoHideMessage(document.getElementById('error-container'));
     });
-}
 
-function unpublishPost(slug) {
-    htmx.ajax('POST', `/api/posts/${slug}/unpublish`, {
-        headers: {
-            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-        }
-    }).then(() => {
-        window.location.reload();
-    }).catch(error => {
-        console.error('Error unpublishing post:', error);
-        alert('Failed to unpublish post. Please try again.');
+    // Handle HTMX errors gracefully
+    document.body.addEventListener('htmx:responseError', function(event) {
+        const errorContainer = document.getElementById('error-container');
+        errorContainer.innerHTML = '<div class="alert alert-error"><p>Operation failed. Please try again.</p></div>';
+        autoHideMessage(errorContainer);
     });
-}
+
+    // Enhanced loading feedback for table operations
+    document.body.addEventListener('htmx:beforeRequest', function(event) {
+        const target = event.target;
+
+        // Add visual feedback for button operations
+        if (target.tagName === 'BUTTON') {
+            target.style.opacity = '0.6';
+            target.style.cursor = 'not-allowed';
+        }
+    });
+
+    document.body.addEventListener('htmx:afterRequest', function(event) {
+        const target = event.target;
+
+        // Remove visual feedback
+        if (target.tagName === 'BUTTON') {
+            target.style.opacity = '';
+            target.style.cursor = '';
+        }
+    });
+});
 </script>
 {% endblock %}

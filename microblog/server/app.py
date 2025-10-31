@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from microblog.server.config import get_config_manager
+from microblog.server.health import get_health_status, get_simple_health_status
 from microblog.server.middleware import (
     AuthenticationMiddleware,
     CSRFProtectionMiddleware,
@@ -20,6 +21,11 @@ from microblog.server.middleware import (
 )
 from microblog.server.routes import api, auth, dashboard
 from microblog.utils import get_content_dir
+from microblog.utils.logging import setup_logging
+from microblog.utils.monitoring import (
+    get_monitoring_summary,
+    start_monitoring_background_tasks,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +52,15 @@ def create_app(dev_mode: bool = False) -> FastAPI:
     # Initialize configuration manager for this app instance
     config_manager = get_config_manager(dev_mode=dev_mode)
     config = config_manager.config
+
+    # Set up logging based on configuration
+    setup_logging(
+        log_level=config.logging.level,
+        log_file=config.logging.file_path,
+        max_bytes=config.logging.max_file_size_mb * 1024 * 1024,
+        backup_count=config.logging.backup_count,
+        console_output=config.logging.console_output
+    )
 
     # Create FastAPI app instance
     app = FastAPI(
@@ -126,10 +141,17 @@ def create_app(dev_mode: bool = False) -> FastAPI:
             await config_manager.start_watcher()
             logger.info("Configuration hot-reload enabled")
 
+        # Start monitoring background tasks if enabled
+        if config.monitoring.enabled:
+            await start_monitoring_background_tasks()
+            logger.info("Monitoring background tasks started")
+
         # Log configuration summary
         logger.info(f"Server configuration: {config.server.host}:{config.server.port}")
         logger.info(f"Site title: {config.site.title}")
         logger.info(f"Development mode: {dev_mode}")
+        logger.info(f"Logging level: {config.logging.level}")
+        logger.info(f"Monitoring enabled: {config.monitoring.enabled}")
 
     @app.on_event("shutdown")
     async def shutdown_event():
@@ -141,15 +163,21 @@ def create_app(dev_mode: bool = False) -> FastAPI:
             await config_manager.stop_watcher()
             logger.info("Configuration file watcher stopped")
 
-    # Add basic health check endpoint
+    # Add comprehensive health check endpoints
     @app.get("/health")
     async def health_check():
-        """Health check endpoint for monitoring."""
-        return {
-            "status": "healthy",
-            "service": "microblog",
-            "version": "1.0.0"
-        }
+        """Comprehensive health check endpoint for monitoring."""
+        return await get_health_status()
+
+    @app.get("/health/simple")
+    async def simple_health_check():
+        """Simple health check endpoint for basic monitoring."""
+        return await get_simple_health_status()
+
+    @app.get("/metrics")
+    async def metrics_endpoint():
+        """Metrics endpoint for monitoring and alerting."""
+        return get_monitoring_summary()
 
     # Add root redirect
     @app.get("/")

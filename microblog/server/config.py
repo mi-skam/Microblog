@@ -47,12 +47,32 @@ class AuthConfig(BaseModel):
     session_expires: int = Field(default=7200, ge=60)  # seconds
 
 
+class LoggingConfig(BaseModel):
+    """Logging configuration settings."""
+    level: str = Field(default="INFO", pattern=r'^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$')
+    file_path: str | None = Field(default=None, max_length=500)
+    max_file_size_mb: int = Field(default=10, ge=1, le=100)
+    backup_count: int = Field(default=5, ge=1, le=20)
+    console_output: bool = Field(default=True)
+    structured_format: bool = Field(default=True)
+
+
+class MonitoringConfig(BaseModel):
+    """Monitoring and alerting configuration settings."""
+    enabled: bool = Field(default=True)
+    metrics_retention_hours: int = Field(default=24, ge=1, le=168)  # 1 hour to 1 week
+    system_metrics_interval: int = Field(default=30, ge=10, le=300)  # 10 seconds to 5 minutes
+    cleanup_interval_hours: int = Field(default=1, ge=1, le=24)
+
+
 class AppConfig(BaseModel):
     """Main application configuration model."""
     site: SiteConfig
     build: BuildConfig = Field(default_factory=BuildConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     auth: AuthConfig
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
 
     @validator('auth')
     def validate_jwt_secret_length(cls, v):
@@ -319,6 +339,19 @@ def create_default_config_file(config_path: Path | None = None) -> Path:
         'auth': {
             'jwt_secret': 'your-super-secret-jwt-key-must-be-at-least-32-characters-long',
             'session_expires': 7200
+        },
+        'logging': {
+            'level': 'INFO',
+            'console_output': True,
+            'structured_format': True,
+            'max_file_size_mb': 10,
+            'backup_count': 5
+        },
+        'monitoring': {
+            'enabled': True,
+            'metrics_retention_hours': 24,
+            'system_metrics_interval': 30,
+            'cleanup_interval_hours': 1
         }
     }
 

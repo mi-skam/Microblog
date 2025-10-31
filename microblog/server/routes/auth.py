@@ -7,7 +7,6 @@ JWT-based authentication flow with secure cookie handling and CSRF protection.
 
 from fastapi import APIRouter, Form, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from microblog.auth.jwt_handler import create_jwt_token
@@ -19,7 +18,9 @@ from microblog.server.middleware import (
     get_current_user,
     validate_csrf_from_form,
 )
+from microblog.server.security import InputSanitizer, log_security_event
 from microblog.utils import get_content_dir
+from microblog.utils.logging import get_security_logger
 
 # Initialize router
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -89,9 +90,29 @@ async def login(
     """
     config = get_config()
 
+    # Sanitize input data
+    try:
+        username = InputSanitizer.sanitize_string(username, max_length=100)
+        # Note: password is not sanitized to preserve original characters
+    except ValueError as e:
+        log_security_event("input_validation_failure", request, {
+            "endpoint": "/auth/login",
+            "reason": str(e),
+            "username": username[:50]  # Log partial username for debugging
+        })
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid input data"
+        ) from e
+
     # Validate CSRF token
     form_data = {"csrf_token": csrf_token}
     if not validate_csrf_from_form(request, form_data):
+        log_security_event("csrf_violation", request, {
+            "endpoint": "/auth/login",
+            "reason": "Invalid CSRF token",
+            "username": username
+        })
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="CSRF token validation failed"
@@ -110,6 +131,20 @@ async def login(
     # Authenticate user
     user = User.get_by_username(username, db_path)
     if not user or not verify_password(password, user.password_hash):
+        # Log authentication failure for security monitoring
+        security_logger = get_security_logger()
+        security_logger.auth_failure(
+            user_id=username,
+            ip_address=request.client.host if request.client else "unknown",
+            reason="Invalid credentials"
+        )
+
+        log_security_event("auth_failure", request, {
+            "endpoint": "/auth/login",
+            "username": username,
+            "reason": "Invalid credentials"
+        })
+
         # Return error for invalid credentials
         csrf_token = get_csrf_token(request)
         return request.app.state.templates.TemplateResponse(
@@ -126,7 +161,20 @@ async def login(
     # Create JWT token
     try:
         jwt_token = create_jwt_token(user.user_id, user.username)
+
+        # Log successful authentication
+        log_security_event("auth_success", request, {
+            "endpoint": "/auth/login",
+            "username": username,
+            "user_id": user.user_id
+        })
+
     except RuntimeError as e:
+        log_security_event("auth_error", request, {
+            "endpoint": "/auth/login",
+            "username": username,
+            "error": str(e)
+        })
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create session: {str(e)}"
@@ -286,9 +334,31 @@ async def api_login(request: Request, login_data: LoginRequest) -> JSONResponse:
     """
     config = get_config()
 
+    # Sanitize input data
+    try:
+        sanitized_username = InputSanitizer.sanitize_string(login_data.username, max_length=100)
+    except ValueError as e:
+        log_security_event("input_validation_failure", request, {
+            "endpoint": "/auth/api/login",
+            "reason": str(e),
+            "username": login_data.username[:50]
+        })
+        return JSONResponse(
+            content=AuthResponse(
+                success=False,
+                message="Invalid input data"
+            ).model_dump(),
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
     # Validate CSRF token
     form_data = {"csrf_token": login_data.csrf_token}
     if not validate_csrf_from_form(request, form_data):
+        log_security_event("csrf_violation", request, {
+            "endpoint": "/auth/api/login",
+            "reason": "Invalid CSRF token",
+            "username": sanitized_username
+        })
         return JSONResponse(
             content=AuthResponse(
                 success=False,
@@ -311,8 +381,22 @@ async def api_login(request: Request, login_data: LoginRequest) -> JSONResponse:
         )
 
     # Authenticate user
-    user = User.get_by_username(login_data.username, db_path)
+    user = User.get_by_username(sanitized_username, db_path)
     if not user or not verify_password(login_data.password, user.password_hash):
+        # Log authentication failure
+        security_logger = get_security_logger()
+        security_logger.auth_failure(
+            user_id=sanitized_username,
+            ip_address=request.client.host if request.client else "unknown",
+            reason="Invalid credentials"
+        )
+
+        log_security_event("auth_failure", request, {
+            "endpoint": "/auth/api/login",
+            "username": sanitized_username,
+            "reason": "Invalid credentials"
+        })
+
         return JSONResponse(
             content=AuthResponse(
                 success=False,
@@ -324,7 +408,20 @@ async def api_login(request: Request, login_data: LoginRequest) -> JSONResponse:
     # Create JWT token
     try:
         jwt_token = create_jwt_token(user.user_id, user.username)
+
+        # Log successful authentication
+        log_security_event("auth_success", request, {
+            "endpoint": "/auth/api/login",
+            "username": sanitized_username,
+            "user_id": user.user_id
+        })
+
     except RuntimeError as e:
+        log_security_event("auth_error", request, {
+            "endpoint": "/auth/api/login",
+            "username": sanitized_username,
+            "error": str(e)
+        })
         return JSONResponse(
             content=AuthResponse(
                 success=False,

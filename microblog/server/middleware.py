@@ -206,20 +206,50 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
-    Security headers middleware to add security-related HTTP headers.
+    Security headers middleware to add comprehensive security-related HTTP headers.
 
-    Adds headers like X-Frame-Options, X-Content-Type-Options, etc.
+    Implements the full set of security headers as specified in the architecture:
+    - X-Frame-Options: Prevent clickjacking attacks
+    - X-Content-Type-Options: Prevent MIME sniffing attacks
+    - X-XSS-Protection: Enable XSS filtering
+    - Strict-Transport-Security: Enforce HTTPS
+    - Content-Security-Policy: Prevent injection attacks
+    - Referrer-Policy: Control referrer information leakage
+    - Permissions-Policy: Control browser features
     """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        """Add security headers to response."""
+        """Add comprehensive security headers to response."""
         response = await call_next(request)
 
-        # Add security headers
+        # Core security headers
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+        # HSTS - Force HTTPS for 1 year including subdomains
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+        # Content Security Policy - Prevent injection attacks
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "style-src 'self' 'unsafe-inline'; "  # Allow inline styles for dashboard
+            "script-src 'self'; "
+            "img-src 'self' data:; "  # Allow data URIs for small images
+            "font-src 'self'; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'"
+        )
+
+        # Permissions Policy - Disable unnecessary browser features
+        response.headers["Permissions-Policy"] = (
+            "camera=(), microphone=(), geolocation=(), payment=(), "
+            "usb=(), magnetometer=(), gyroscope=(), accelerometer=(), "
+            "ambient-light-sensor=(), autoplay=(), encrypted-media=(), "
+            "picture-in-picture=()"
+        )
 
         return response
 

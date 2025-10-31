@@ -10,24 +10,17 @@ This is the full specification of the task you must complete.
 
 ```json
 {
-  "task_id": "I6.T1",
+  "task_id": "I6.T2",
   "iteration_id": "I6",
   "iteration_goal": "Implement production features, security hardening, deployment support, comprehensive documentation, and final system testing",
-  "description": "Implement comprehensive error handling, logging system with structured logs, health check endpoints, and monitoring capabilities. Add performance tracking and alerting.",
+  "description": "Implement security hardening including rate limiting on authentication, security headers, input sanitization, and vulnerability protection. Add security audit logging.",
   "agent_type_hint": "BackendAgent",
-  "inputs": "Production monitoring requirements, logging standards, health check patterns",
-  "target_files": [
-    "microblog/utils/logging.py",
-    "microblog/server/health.py",
-    "microblog/utils/monitoring.py"
-  ],
-  "input_files": [
-    "microblog/server/app.py",
-    "microblog/server/config.py"
-  ],
-  "deliverables": "Structured logging system, health check endpoints, error handling, monitoring utilities, performance tracking",
-  "acceptance_criteria": "Logs are structured and parseable, health checks report system status, error handling is comprehensive, monitoring tracks key metrics",
-  "dependencies": ["I5.T5"],
+  "inputs": "Security requirements, rate limiting patterns, vulnerability protection",
+  "target_files": ["microblog/server/security.py", "microblog/server/middleware.py"],
+  "input_files": ["microblog/server/middleware.py", "microblog/server/routes/auth.py"],
+  "deliverables": "Rate limiting implementation, security headers, input sanitization, vulnerability protection, security audit logging",
+  "acceptance_criteria": "Rate limiting prevents brute force attacks, security headers set correctly, input sanitization prevents XSS, audit logs capture security events",
+  "dependencies": ["I4.T4"],
   "parallelizable": true,
   "done": false
 }
@@ -38,6 +31,43 @@ This is the full specification of the task you must complete.
 ## 2. Architectural & Planning Context
 
 The following are the relevant sections from the architecture and plan documents, which I found by analyzing the task description.
+
+### Context: security-considerations (from 05_Operational_Architecture.md)
+
+```markdown
+**Security Considerations:**
+
+**Input Validation & Sanitization:**
+- **Markdown Sanitization**: HTML escaping by default to prevent XSS attacks
+- **File Upload Validation**: Extension whitelist, MIME type verification, size limits
+- **Path Traversal Prevention**: Filename sanitization and directory boundary enforcement
+- **SQL Injection Prevention**: Parameterized queries for all database operations
+- **Command Injection Prevention**: No direct shell execution from user input
+
+**Security Headers:**
+```python
+# Security middleware configuration
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "X-XSS-Protection": "1; mode=block",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline'"
+}
+```
+
+**Data Protection:**
+- **Secrets Management**: JWT secret stored in configuration with minimum 32-character requirement
+- **Database Security**: SQLite file permissions restricted to application user
+- **File System Security**: Content directory permissions preventing unauthorized access
+- **Backup Security**: Build backups stored with same security constraints as primary data
+
+**Vulnerability Mitigation:**
+- **Rate Limiting**: Authentication endpoint protection against brute force attacks
+- **CSRF Protection**: Synchronizer token pattern for all state-changing operations
+- **Session Security**: Automatic token expiration and secure cookie attributes
+- **Dependency Scanning**: Regular security updates for Python dependencies
+```
 
 ### Context: logging-monitoring (from 05_Operational_Architecture.md)
 
@@ -78,113 +108,61 @@ LOGGING_CONFIG = {
 - **File System Monitoring**: Disk space usage and permission issues
 - **Performance Metrics**: Response times, concurrent users, resource usage
 - **Error Tracking**: Automatic error aggregation and alerting
-
-**Health Check Endpoint:**
-```python
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
-        "version": "1.0.0",
-        "database": check_database_connection(),
-        "filesystem": check_filesystem_permissions(),
-        "last_build": get_last_build_status()
-    }
-```
 ```
 
-### Context: scalability-performance (from 05_Operational_Architecture.md)
+### Context: authentication-authorization (from 05_Operational_Architecture.md)
 
 ```markdown
-**Scalability & Performance:**
+**Authentication & Authorization:**
 
-**Performance Optimization:**
-- **Static Content Delivery**: Pre-generated HTML eliminates server processing overhead
-- **Efficient File I/O**: Optimized markdown parsing and template rendering
-- **Database Optimization**: Single-user SQLite with minimal query complexity
-- **Asset Optimization**: Minified CSS and vendored JavaScript for reduced load times
-- **Caching Strategy**: Browser caching headers for static content
+**Authentication Strategy:**
+- **Single-User Design**: System supports exactly one admin user with fixed role
+- **JWT-Based Sessions**: Stateless authentication using JSON Web Tokens
+- **Secure Token Storage**: JWT stored in httpOnly, Secure, SameSite=Strict cookies
+- **Password Security**: Bcrypt hashing with cost factor ≥12 for password storage
+- **Session Management**: Configurable token expiration (default 2 hours)
 
-**Build Performance:**
+**Implementation Details:**
 ```python
-# Build performance targets
-BUILD_PERFORMANCE_TARGETS = {
-    "100_posts": "< 5 seconds",
-    "1000_posts": "< 30 seconds",
-    "markdown_parsing": "< 100ms per file",
-    "template_rendering": "< 50ms per page",
-    "image_copying": "< 1GB per minute"
+# Authentication flow
+def authenticate_user(username: str, password: str) -> Optional[User]:
+    user = get_user_by_username(username)
+    if user and verify_password(password, user.password_hash):
+        token = create_jwt_token(user.user_id, user.username)
+        return user, token
+    return None
+
+# JWT Token Structure
+{
+    "user_id": 1,
+    "username": "admin",
+    "role": "admin",
+    "exp": 1635724800,  # Expiration timestamp
+    "iat": 1635721200   # Issued at timestamp
 }
 ```
 
-**Scalability Considerations:**
-- **Horizontal Scaling**: Static output enables CDN distribution and geographic scaling
-- **Vertical Scaling**: Single-threaded build process can utilize multiple CPU cores for file processing
-- **Storage Scaling**: File system architecture supports unlimited content growth
-- **Traffic Scaling**: Static site delivery handles unlimited concurrent readers
-
-**Performance Monitoring:**
-- **Build Time Tracking**: Monitoring build duration and identifying bottlenecks
-- **API Response Times**: Dashboard endpoint performance measurement
-- **Resource Usage**: Memory and CPU utilization during build processes
-- **File System Performance**: I/O operation timing and throughput measurement
+**Authorization Model:**
+- **Role-Based**: Single admin role with full system access
+- **Route Protection**: Middleware validates JWT for protected endpoints
+- **CSRF Protection**: All state-changing operations require valid CSRF tokens
+- **Session Validation**: Automatic token expiration and renewal handling
 ```
 
-### Context: reliability-availability (from 05_Operational_Architecture.md)
+### Context: task-i6-t2 (from 02_Iteration_I6.md)
 
 ```markdown
-**Reliability & Availability:**
-
-**Fault Tolerance:**
-- **Atomic Builds**: Complete success or complete rollback for site generation
-- **Backup Strategy**: Automatic backup creation before each build operation
-- **Rollback Capability**: Instant restoration to previous working state on build failure
-- **Error Recovery**: Graceful handling of file system and permission errors
-- **Data Integrity**: Validation of content files and configuration during processing
-
-**High Availability Design:**
-```python
-# Build safety implementation
-def atomic_build():
-    backup_current_build()  # Preserve working state
-    try:
-        generate_new_build()  # Create complete new build
-        validate_build_output()  # Verify build integrity
-        activate_new_build()  # Atomic swap to new version
-    except Exception as e:
-        restore_from_backup()  # Rollback on any failure
-        raise BuildFailedException(f"Build failed: {e}")
-    finally:
-        cleanup_old_backups()  # Maintain backup retention
-```
-
-**Disaster Recovery:**
-- **Content Backup**: File system backup strategy for content directory
-- **Database Backup**: SQLite database backup and restoration procedures
-- **Configuration Backup**: Version control for configuration files
-- **Build Artifact Retention**: Multiple build versions for recovery scenarios
-
-**System Recovery:**
-- **Automatic Directory Creation**: Missing directory structure creation on startup
-- **Permission Repair**: Automated fixing of common permission issues
-- **Database Repair**: Automatic SQLite database creation and schema migration
-- **Configuration Validation**: Startup validation with detailed error reporting
-```
-
-### Context: task-i6-t1 (from 02_Iteration_I6.md)
-
-```markdown
-*   **Task 6.1:**
-    *   **Task ID:** `I6.T1`
-    *   **Description:** Implement comprehensive error handling, logging system with structured logs, health check endpoints, and monitoring capabilities. Add performance tracking and alerting.
+<!-- anchor: task-i6-t2 -->
+*   **Task 6.2:**
+    *   **Task ID:** `I6.T2`
+    *   **Description:** Implement security hardening including rate limiting on authentication, security headers, input sanitization, and vulnerability protection. Add security audit logging.
     *   **Agent Type Hint:** `BackendAgent`
-    *   **Inputs:** Production monitoring requirements, logging standards, health check patterns
-    *   **Input Files:** ["microblog/server/app.py", "microblog/server/config.py"]
-    *   **Target Files:** ["microblog/utils/logging.py", "microblog/server/health.py", "microblog/utils/monitoring.py"]
-    *   **Deliverables:** Structured logging system, health check endpoints, error handling, monitoring utilities, performance tracking
-    *   **Acceptance Criteria:** Logs are structured and parseable, health checks report system status, error handling is comprehensive, monitoring tracks key metrics
-    *   **Dependencies:** `I5.T5`
+    *   **Inputs:** Security requirements, rate limiting patterns, vulnerability protection
+    *   **Input Files:** ["microblog/server/middleware.py", "microblog/server/routes/auth.py"]
+    *   **Target Files:** ["microblog/server/security.py", "microblog/server/middleware.py"]
+    *   **Deliverables:** Rate limiting implementation, security headers, input sanitization, vulnerability protection, security audit logging
+    *   **Acceptance Criteria:** Rate limiting prevents brute force attacks, security headers set correctly, input sanitization prevents XSS, audit logs capture security events
+    *   **Dependencies:** `I4.T4`
     *   **Parallelizable:** Yes
 ```
 
@@ -196,34 +174,36 @@ The following analysis is based on my direct review of the current codebase. Use
 
 ### Relevant Existing Code
 
-*   **File:** `microblog/server/app.py`
-    *   **Summary:** Contains the FastAPI application factory with middleware setup, route registration, and basic health check endpoint. Already has basic logging setup and a minimal health check.
-    *   **Recommendation:** You MUST extend the existing health check endpoint at line 145-152 rather than creating a new one. You SHOULD enhance the existing logging setup at line 24 and use the existing logger instance.
-
-*   **File:** `microblog/server/config.py`
-    *   **Summary:** Comprehensive configuration management system with YAML parsing, validation, and hot-reload support. Uses Pydantic models for configuration validation.
-    *   **Recommendation:** You SHOULD add logging configuration options to the existing Pydantic models (e.g., LoggingConfig class). You MUST use the existing ConfigManager pattern for any new configuration needs.
-
 *   **File:** `microblog/server/middleware.py`
-    *   **Summary:** Contains authentication, CSRF protection, and security headers middleware. Already has proper error handling patterns.
-    *   **Recommendation:** You SHOULD follow the same middleware patterns and error handling approaches used in this file. The existing logger at line 19 should be used as a reference for logging patterns.
+    *   **Summary:** This file contains comprehensive authentication middleware (JWT validation), CSRF protection middleware, and basic security headers middleware. It already implements secure session management with proper cookie handling.
+    *   **Recommendation:** You MUST extend the existing `SecurityHeadersMiddleware` class to include the additional security headers specified in the architecture. The current implementation has basic headers but needs the full HSTS and CSP headers from the spec.
 
-*   **File:** `microblog/server/build_service.py`
-    *   **Summary:** Background build processing service with job queuing, progress tracking, and comprehensive status management. Already has excellent logging and monitoring patterns.
-    *   **Recommendation:** You MUST use this file as a reference for monitoring patterns. The BuildService class shows excellent examples of structured logging, progress tracking, and error handling that you should emulate in your monitoring utilities.
+*   **File:** `microblog/server/routes/auth.py`
+    *   **Summary:** This file contains all authentication routes including login, logout, and session checking. It properly validates CSRF tokens and implements secure cookie handling with JWT tokens.
+    *   **Recommendation:** You SHOULD add rate limiting specifically to the authentication endpoints in this file. The current login endpoint (lines 69-151) needs brute force protection.
+
+*   **File:** `microblog/utils/logging.py`
+    *   **Summary:** This file provides a comprehensive structured logging system with specialized SecurityLogger, PerformanceLogger, and AuditLogger classes. It includes methods for auth failures, CSRF violations, and suspicious activity logging.
+    *   **Recommendation:** You MUST use the existing `SecurityLogger` class for security audit logging. It already has methods like `auth_failure()`, `csrf_violation()`, and `permission_denied()` that you should integrate with your rate limiting implementation.
+
+*   **File:** `microblog/server/app.py`
+    *   **Summary:** This file sets up the FastAPI application with middleware registration. It already registers the existing security middleware in proper order.
+    *   **Recommendation:** You MUST add your new rate limiting middleware to the middleware stack in this file. Follow the existing pattern of middleware registration on lines 85-111.
 
 ### Implementation Tips & Notes
 
-*   **Tip:** The project already uses the standard Python `logging` module extensively. You SHOULD build on this existing foundation rather than introducing new logging libraries.
+*   **Tip:** The project already has a solid foundation for security with JWT authentication, CSRF protection, and structured logging. Your task is to enhance this with rate limiting and additional security headers.
 
-*   **Note:** The existing health check at `app.py:145-152` is very basic and needs to be enhanced according to the architectural specification. You MUST implement database connection checks, filesystem permission checks, and last build status checks.
+*   **Note:** The architecture specification calls for specific security headers including HSTS and CSP. The current `SecurityHeadersMiddleware` (lines 207-224 in middleware.py) only implements basic headers - you need to add the missing ones from the architecture spec.
 
-*   **Warning:** The application uses Pydantic extensively for configuration validation. Any new configuration options you add MUST follow the same patterns used in `config.py` with proper validation and type hints.
+*   **Warning:** The project uses FastAPI with Starlette middleware. When implementing rate limiting, ensure you follow the `BaseHTTPMiddleware` pattern used by existing middleware to maintain consistency.
 
-*   **Tip:** The BuildService in `build_service.py` already has excellent progress tracking and job monitoring. You SHOULD reuse these patterns for general system monitoring rather than duplicating the approach.
+*   **Tip:** The SecurityLogger class already exists and has exactly the methods you need for audit logging. Import and use `get_security_logger()` from `microblog.utils.logging` rather than creating your own logging implementation.
 
-*   **Note:** The project follows a clean separation of concerns with utils, server, and service modules. Your new monitoring utilities MUST be placed in the `microblog/utils/` directory and health check enhancements in `microblog/server/`.
+*   **Note:** The authentication endpoints that need rate limiting are in `/auth/login` and `/auth/api/login`. Both handle user authentication and are vulnerable to brute force attacks without rate limiting.
 
-*   **Warning:** The middleware system is carefully layered (SecurityHeaders → CSRF → Authentication). Any new monitoring middleware MUST be added in the correct layer order and follow the same patterns.
+*   **Warning:** The project doesn't currently have any rate limiting dependencies in `pyproject.toml`. You'll need to research appropriate libraries (like `slowapi` for FastAPI rate limiting) and add them to the dependencies.
 
-*   **Tip:** The configuration system supports hot-reload in development mode. Any logging configuration changes SHOULD integrate with this existing hot-reload capability.
+*   **Tip:** The middleware registration order matters in FastAPI. Rate limiting should typically be applied early in the middleware stack, but after CORS. Study the existing middleware order in `app.py` lines 75-111 for guidance.
+
+*   **Note:** Input sanitization is mentioned in the architecture but the current markdown processor already handles HTML escaping. Focus on validating and sanitizing user inputs in forms and API endpoints rather than duplicating existing markdown sanitization.

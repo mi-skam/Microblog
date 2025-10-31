@@ -20,6 +20,7 @@ from microblog.server.middleware import (
     SecurityHeadersMiddleware,
 )
 from microblog.server.routes import api, auth, dashboard
+from microblog.server.security import RateLimitingMiddleware
 from microblog.utils import get_content_dir
 from microblog.utils.logging import setup_logging
 from microblog.utils.monitoring import (
@@ -85,7 +86,15 @@ def create_app(dev_mode: bool = False) -> FastAPI:
     # Add security headers middleware (layer 1 - outermost)
     app.add_middleware(SecurityHeadersMiddleware)
 
-    # Add CSRF protection middleware (layer 2 - before auth)
+    # Add rate limiting middleware (layer 2 - after CORS, before CSRF)
+    app.add_middleware(
+        RateLimitingMiddleware,
+        default_rate_limit="100/minute",
+        auth_rate_limit="5/minute",
+        api_rate_limit="60/minute"
+    )
+
+    # Add CSRF protection middleware (layer 3 - before auth)
     app.add_middleware(
         CSRFProtectionMiddleware,
         cookie_name="csrf_token",
@@ -99,7 +108,7 @@ def create_app(dev_mode: bool = False) -> FastAPI:
         ]
     )
 
-    # Add authentication middleware (layer 3 - innermost)
+    # Add authentication middleware (layer 4 - innermost)
     app.add_middleware(
         AuthenticationMiddleware,
         cookie_name="jwt",

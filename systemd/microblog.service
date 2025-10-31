@@ -1,0 +1,62 @@
+[Unit]
+Description=MicroBlog Dashboard Service
+Documentation=https://github.com/your-org/microblog
+After=network.target network-online.target
+Wants=network-online.target
+# If using a database service, add dependency here
+# After=postgresql.service
+# Wants=postgresql.service
+
+[Service]
+Type=simple
+User=microblog
+Group=microblog
+
+# Working directory
+WorkingDirectory=/opt/microblog
+
+# Environment configuration
+Environment=PYTHONPATH=/opt/microblog
+Environment=MICROBLOG_DEBUG=false
+Environment=MICROBLOG_ENV=production
+
+# Virtual environment path
+Environment=PATH=/opt/microblog/.venv/bin:/usr/local/bin:/usr/bin:/bin
+
+# Start command
+ExecStart=/opt/microblog/.venv/bin/microblog serve --config /opt/microblog/config.yaml --host 0.0.0.0 --port 8000
+
+# Restart configuration
+Restart=always
+RestartSec=3
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# Process management
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=5
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/microblog
+ReadOnlyPaths=/opt/microblog/.venv
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=microblog
+
+# Health check (optional - requires systemd 249+)
+# ExecStartPost=/bin/sleep 5
+# ExecStartPost=/usr/bin/curl -f http://localhost:8000/health || exit 1
+
+[Install]
+WantedBy=multi-user.target

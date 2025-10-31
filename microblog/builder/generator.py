@@ -21,6 +21,12 @@ from microblog.builder.template_renderer import get_template_renderer
 from microblog.content.post_service import get_post_service
 from microblog.server.config import get_config
 from microblog.utils import ensure_directory
+from microblog.utils.cache import (
+    ParallelProcessor,
+    PerformanceTimer,
+    get_performance_monitor,
+    performance_timer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +110,11 @@ class BuildGenerator:
         self.progress_history: list[BuildProgress] = []
         self.build_start_time: datetime | None = None
 
-        logger.info("Build generator initialized")
+        # Performance optimization components
+        self.performance_monitor = get_performance_monitor()
+        self.parallel_processor = ParallelProcessor(self.config.performance.max_parallel_workers)
+
+        logger.info("Build generator initialized with performance optimizations")
 
     def _report_progress(self, phase: BuildPhase, message: str, percentage: float = 0.0, details: dict[str, Any] | None = None):
         """
@@ -234,9 +244,10 @@ class BuildGenerator:
             logger.error(f"Failed to rollback from backup: {e}")
             return False
 
+    @performance_timer("content_processing")
     def _process_content(self) -> tuple[list, dict[str, Any]]:
         """
-        Process all markdown content to HTML.
+        Process all markdown content to HTML using parallel processing.
 
         Returns:
             Tuple of (processed_posts, processing_stats)
@@ -245,37 +256,75 @@ class BuildGenerator:
             BuildGeneratingError: If content processing fails
         """
         try:
+            self.performance_monitor.start_phase("content_processing")
+
             # Get all published posts
             posts = self.post_service.get_published_posts()
             logger.info(f"Found {len(posts)} published posts to process")
 
             if not posts:
                 logger.warning("No published posts found")
+                self.performance_monitor.end_phase("content_processing")
+                return [], {'total_posts': 0, 'processed_posts': 0, 'processing_errors': 0}
 
+            def process_single_post(post):
+                """Process a single post for parallel execution."""
+                try:
+                    with PerformanceTimer(f"markdown_processing_{post.computed_slug}"):
+                        html_content = self.markdown_processor.process_content(post)
+                        return {
+                            'post': post,
+                            'html_content': html_content,
+                            'success': True
+                        }
+                except Exception as e:
+                    logger.error(f"Failed to process post '{post.frontmatter.title}': {e}")
+                    return {
+                        'post': post,
+                        'html_content': None,
+                        'success': False,
+                        'error': e
+                    }
+
+            # Process posts in parallel if enabled and we have multiple posts
+            if len(posts) > 1 and self.config.performance.enable_parallel_processing:
+                logger.info(f"Processing {len(posts)} posts in parallel")
+
+                def progress_callback(completed, total):
+                    progress = (completed / total) * 100
+                    self._report_progress(
+                        BuildPhase.CONTENT_PROCESSING,
+                        f"Processed {completed}/{total} posts",
+                        progress,
+                        {'processed': completed, 'total': total}
+                    )
+
+                results = self.parallel_processor.process_in_parallel(
+                    posts,
+                    process_single_post,
+                    progress_callback
+                )
+            else:
+                # Single post - process directly
+                results = [process_single_post(posts[0])]
+                self._report_progress(
+                    BuildPhase.CONTENT_PROCESSING,
+                    f"Processed post: {posts[0].frontmatter.title}",
+                    100,
+                    {'processed': 1, 'total': 1}
+                )
+
+            # Separate successful and failed results
             processed_posts = []
             processing_errors = 0
 
-            for i, post in enumerate(posts):
-                try:
-                    # Process markdown content
-                    html_content = self.markdown_processor.process_content(post)
-
+            for result in results:
+                if result and result.get('success', False):
                     processed_posts.append({
-                        'post': post,
-                        'html_content': html_content
+                        'post': result['post'],
+                        'html_content': result['html_content']
                     })
-
-                    # Report progress
-                    progress = ((i + 1) / len(posts)) * 100 if posts else 100
-                    self._report_progress(
-                        BuildPhase.CONTENT_PROCESSING,
-                        f"Processed post: {post.frontmatter.title}",
-                        progress,
-                        {'processed': i + 1, 'total': len(posts)}
-                    )
-
-                except Exception as e:
-                    logger.error(f"Failed to process post '{post.frontmatter.title}': {e}")
+                else:
                     processing_errors += 1
 
             if processing_errors > 0:
@@ -284,19 +333,23 @@ class BuildGenerator:
             stats = {
                 'total_posts': len(posts),
                 'processed_posts': len(processed_posts),
-                'processing_errors': processing_errors
+                'processing_errors': processing_errors,
+                'parallel_processing': len(posts) > 1
             }
 
+            self.performance_monitor.end_phase("content_processing")
             logger.info(f"Content processing completed: {len(processed_posts)} posts processed")
             return processed_posts, stats
 
         except Exception as e:
+            self.performance_monitor.end_phase("content_processing")
             logger.error(f"Content processing failed: {e}")
             raise BuildGeneratingError(f"Content processing failed: {e}") from e
 
+    @performance_timer("template_rendering")
     def _render_templates(self, processed_posts: list) -> dict[str, Any]:
         """
-        Render all templates and generate static pages.
+        Render all templates and generate static pages with performance monitoring.
 
         Args:
             processed_posts: List of processed post data
@@ -308,6 +361,7 @@ class BuildGenerator:
             BuildGeneratingError: If template rendering fails
         """
         try:
+            self.performance_monitor.start_phase("template_rendering")
             posts = [item['post'] for item in processed_posts]
             rendering_stats = {
                 'pages_rendered': 0,
@@ -427,10 +481,12 @@ class BuildGenerator:
             if rendering_stats['rendering_errors'] > 0:
                 raise BuildGeneratingError(f"Template rendering had {rendering_stats['rendering_errors']} errors")
 
+            self.performance_monitor.end_phase("template_rendering")
             logger.info(f"Template rendering completed: {rendering_stats['pages_rendered']} pages rendered")
             return rendering_stats
 
         except Exception as e:
+            self.performance_monitor.end_phase("template_rendering")
             logger.error(f"Template rendering failed: {e}")
             raise BuildGeneratingError(f"Template rendering failed: {e}") from e
 
@@ -546,12 +602,13 @@ class BuildGenerator:
 
     def build(self) -> BuildResult:
         """
-        Execute the complete build process with atomic operations.
+        Execute the complete build process with atomic operations and performance monitoring.
 
         Returns:
             BuildResult with success status and detailed information
         """
         self.build_start_time = datetime.now()
+        self.performance_monitor.start_build()
 
         try:
             # Phase 1: Initialization and validation
@@ -629,13 +686,20 @@ class BuildGenerator:
                 100
             )
 
+            # Get performance metrics and check targets
+            performance_metrics = self.performance_monitor.get_metrics_summary()
+            performance_targets_met = self.performance_monitor.check_performance_targets()
+
             # Compile comprehensive stats
             build_stats = {
                 'content': content_stats,
                 'rendering': rendering_stats,
                 'assets': asset_stats,
                 'duration': duration,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now().isoformat(),
+                'performance_metrics': performance_metrics,
+                'performance_targets_met': performance_targets_met,
+                'cache_stats': self.template_renderer.get_cache_stats()
             }
 
             return BuildResult(
@@ -686,6 +750,19 @@ class BuildGenerator:
                 progress_history=self.progress_history.copy(),
                 error=e
             )
+
+    def get_performance_stats(self) -> dict[str, Any]:
+        """Get current performance statistics."""
+        return {
+            'performance_metrics': self.performance_monitor.get_metrics_summary(),
+            'performance_targets_met': self.performance_monitor.check_performance_targets(),
+            'cache_stats': self.template_renderer.get_cache_stats()
+        }
+
+    def clear_caches(self):
+        """Clear all performance caches."""
+        self.template_renderer.clear_template_cache()
+        logger.info("All performance caches cleared")
 
 
 # Global build generator instance

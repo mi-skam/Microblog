@@ -15,6 +15,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from microblog.content.post_service import PostContent, get_post_service
 from microblog.server.config import get_config
 from microblog.utils import get_templates_dir
+from microblog.utils.cache import PerformanceTimer, get_template_cache
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ class TemplateRenderer:
         self.env = self._create_jinja_environment()
         self.config = get_config()
         self.post_service = get_post_service()
+        self.template_cache = get_template_cache()
         logger.info(f"Template renderer initialized with directory: {self.templates_dir}")
 
     def _create_jinja_environment(self) -> Environment:
@@ -171,16 +173,33 @@ class TemplateRenderer:
             TemplateRenderingError: If template rendering fails
         """
         try:
-            template = self.env.get_template(template_name)
+            with PerformanceTimer(f"template_render_{template_name}"):
+                # Check cache for rendered output first
+                cached_output = self.template_cache.get_rendered_output(template_name, context)
+                if cached_output is not None:
+                    logger.debug(f"Template cache hit: {template_name}")
+                    return cached_output
 
-            # Merge base context with provided context
-            render_context = self._get_base_context()
-            if context:
-                render_context.update(context)
+                # Get compiled template (may be cached)
+                template_path = self.templates_dir / template_name
+                template = self.template_cache.get_compiled_template(
+                    template_path,
+                    lambda: self.env.get_template(template_name)
+                )
 
-            result = template.render(render_context)
-            logger.debug(f"Rendered template: {template_name}")
-            return result
+                # Merge base context with provided context
+                render_context = self._get_base_context()
+                if context:
+                    render_context.update(context)
+
+                # Render template
+                result = template.render(render_context)
+
+                # Cache the rendered output
+                self.template_cache.put_rendered_output(template_name, context, result)
+
+                logger.debug(f"Rendered and cached template: {template_name}")
+                return result
 
         except Exception as e:
             raise TemplateRenderingError(f"Failed to render template '{template_name}': {e}") from e
@@ -388,6 +407,20 @@ class TemplateRenderer:
             return True, None
         except Exception as e:
             return False, str(e)
+
+    def clear_template_cache(self):
+        """Clear all template caches."""
+        self.template_cache.clear_all()
+        logger.info("Template cache cleared")
+
+    def get_cache_stats(self) -> dict[str, Any]:
+        """Get template cache statistics."""
+        return self.template_cache.get_stats()
+
+    def invalidate_template_cache(self, template_name: str):
+        """Invalidate cache for a specific template."""
+        self.template_cache.invalidate_template(template_name)
+        logger.debug(f"Invalidated cache for template: {template_name}")
 
 
 # Global template renderer instance

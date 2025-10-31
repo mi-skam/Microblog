@@ -57,6 +57,22 @@ class LoggingConfig(BaseModel):
     structured_format: bool = Field(default=True)
 
 
+class PerformanceConfig(BaseModel):
+    """Performance optimization configuration settings."""
+    enable_template_caching: bool = Field(default=True)
+    enable_rendered_output_caching: bool = Field(default=True)
+    template_cache_size: int = Field(default=50, ge=10, le=500)
+    rendered_cache_size: int = Field(default=200, ge=50, le=2000)
+    enable_parallel_processing: bool = Field(default=True)
+    max_parallel_workers: int | None = Field(default=None, ge=1, le=16)
+    build_performance_targets: dict[str, float] = Field(default_factory=lambda: {
+        'build_time_100_posts': 5.0,  # seconds
+        'build_time_1000_posts': 30.0,  # seconds
+        'markdown_parsing_per_file': 0.1,  # seconds
+        'template_rendering_per_page': 0.05  # seconds
+    })
+
+
 class MonitoringConfig(BaseModel):
     """Monitoring and alerting configuration settings."""
     enabled: bool = Field(default=True)
@@ -73,6 +89,7 @@ class AppConfig(BaseModel):
     auth: AuthConfig
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
+    performance: PerformanceConfig = Field(default_factory=PerformanceConfig)
 
     @validator('auth')
     def validate_jwt_secret_length(cls, v):
@@ -352,6 +369,19 @@ def create_default_config_file(config_path: Path | None = None) -> Path:
             'metrics_retention_hours': 24,
             'system_metrics_interval': 30,
             'cleanup_interval_hours': 1
+        },
+        'performance': {
+            'enable_template_caching': True,
+            'enable_rendered_output_caching': True,
+            'template_cache_size': 50,
+            'rendered_cache_size': 200,
+            'enable_parallel_processing': True,
+            'build_performance_targets': {
+                'build_time_100_posts': 5.0,
+                'build_time_1000_posts': 30.0,
+                'markdown_parsing_per_file': 0.1,
+                'template_rendering_per_page': 0.05
+            }
         }
     }
 
